@@ -8,6 +8,7 @@ vim.cmd('nnoremap <C-e> :NERDTreeToggle<CR>')
 vim.cmd('nnoremap <C-p> :Telescope find_files<CR>')
 vim.cmd('nnoremap <C-y> :Telescope live_grep<CR>')
 vim.cmd([[nmap <C-z> <Nop>]])
+vim.cmd[[colorscheme tokyonight]]
 
 local has = function(x)
   return vim.fn.has(x) == 1
