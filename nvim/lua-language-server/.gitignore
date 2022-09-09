@@ -1,0 +1,10 @@
+/log
+/build
+/test/temp.lua
+/meta/*
+!/meta/template
+!/meta/3rd
+/bin-Windows
+/bin-Linux
+/bin-macOS
+/bin
