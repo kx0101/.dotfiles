@@ -13,7 +13,7 @@
     - zsh
   - name: Install ohmyzsh
     shell: curl -L https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh | sh
-    when: "'/Users/elijahkoulaxis/.oh-my-zsh' is file"
+    when: "'/.oh-my-zsh' is file"
     tags: 
     - zsh
   - name: Install zsh plugin auto-suggestions
