@@ -31,19 +31,24 @@
     shell: sed -i '' 's/(git/(git zsh-autosuggestions/' ~/.zshrc
     tags: 
     - zsh
-  - name: install nodejs
+  - name: Install tmux for macos/windows
+    shell: name=tmux
+    tags:
+    - tmux
+  - name: Install tmux for Ubuntu
+    apt: name=tmux
+    when: ansible_os_family == "Ubuntu"
+    tags:
+    - tmux
+  - name: Install nodejs
     shell: name=nodejs 
     tags:
     - node
-  - name: install npm
+  - name: Install npm
     shell: name=npm
     tags:
     - node
-  - name: Install n
-    shell: npm install n 
-    tags:
-    - node
-  - name: typescript 
+  - name: Typescript 
     shell: npm install typescript 
     tags:
     - node
