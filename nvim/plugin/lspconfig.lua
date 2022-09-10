@@ -67,8 +67,8 @@ nvim_lsp.flow.setup {
 
 nvim_lsp.tsserver.setup {
   on_attach = on_attach,
-  filetypes = { "javascript", "javascriptreact", "javascript.jsx", "typescript", "typescriptreact", "typescript.tsx" }, 
-  cmd = { "typescript-language-server.cmd", "--stdio" },
+  filetypes = { "typescript", "typescriptreact", "typescript.tsx" }, 
+  cmd = { "typescript-language-server", "--stdio" },
   capabilities = capabilities
 }
 
@@ -94,7 +94,11 @@ nvim_lsp.sumneko_lua.setup {
   },
 }
 
-nvim_lsp.tailwindcss.setup {}
+nvim_lsp.tailwindcss.setup {
+  highlight = {
+    enable = true
+  }
+}
 
 vim.lsp.handlers["textDocument/publishDiagnostics"] = vim.lsp.with(
   vim.lsp.diagnostic.on_publish_diagnostics, {

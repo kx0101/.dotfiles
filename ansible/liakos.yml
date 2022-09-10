@@ -4,7 +4,7 @@
     ansible_python_interpreter: /usr/bin/python3
   tasks:
   - name: Install zsh shell
-    shell: name=zsh
+    apt: name=zsh
     tags: 
     - zsh
   - name: Change shell
@@ -13,15 +13,17 @@
     - zsh
   - name: Install ohmyzsh
     shell: curl -L https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh | sh
-    when: "'/Users/elijahkoulaxis/.oh-my-zsh' is file"
+    when: "'/.oh-my-zsh' is file"
     tags: 
     - zsh
   - name: Install zsh plugin auto-suggestions
-    shell: 'git config --global --add safe.directory /Users/elijahkoulaxis/.oh-my-zsh/plugins/zsh-autosuggestions'
+    ansible.builtin.git:
+            repo: 'https://github.com/zsh-users/zsh-autosuggestions.git'
+            dest: "~/.oh-my-zsh/plugins/zsh-autosuggestions"
     tags: 
     - zsh
   - name: update our zshrc
-    shell: sed -i '' "s/(git/(git zsh-autosuggestions/" ~/.zshrc
+    shell: sed -i '' 's/(git/(git zsh-autosuggestions/' ~/.zshrc
     tags: 
     - zsh
   - name: install nodejs
