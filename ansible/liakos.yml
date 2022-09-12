@@ -39,6 +39,6 @@
       tags:
         - node
     - name: Typescript
-      shell: npm install typescript
+      shell: npm install -g typescript
       tags:
         - node
