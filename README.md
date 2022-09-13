@@ -1,3 +1,5 @@
 # .dotfiles
 
-Just nvim for now..
+-nvim
+-ansible workstation script
+-tmux
