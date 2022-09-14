@@ -3,8 +3,13 @@
   vars:
     ansible_python_interpreter: /usr/bin/python3
   tasks:
-    - name: Install zsh shell
+    - name: Install zsh shell for Ubuntu
       apt: name=zsh
+      when: ansible_os_family == "Ubuntu"
+      tags:
+        - zsh
+    - name: Install zsh shell for macOS/Windows
+      shell: name=zsh
       tags:
         - zsh
     - name: Change shell
