@@ -51,4 +51,5 @@ packer.startup(function(use)
     run = ':TSUpdate'
   }
   use 'nvim-treesitter/nvim-treesitter-context'
+  use 'dyng/ctrlsf.vim'
 end)
