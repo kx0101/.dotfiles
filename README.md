@@ -1,3 +1,2 @@
 # .dotfiles
-
-Just nvim for now..
+# ansible
