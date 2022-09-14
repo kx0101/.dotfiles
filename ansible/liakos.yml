@@ -12,6 +12,7 @@
         - install
         - core
   tasks:
+<<<<<<< HEAD
     - include: tasks/git-setup.yml
     - include: tasks/core-setup.yml
     - include: tasks/node-setup.yml
@@ -21,3 +22,49 @@
     - include: tasks/brave.yml
     - include: tasks/productivity-tools.yml
     - include: tasks/lsp.yml
+=======
+    - name: Install zsh shell for Ubuntu
+      apt: name=zsh
+      when: ansible_os_family == "Ubuntu"
+      tags:
+        - zsh
+    - name: Install zsh shell for macOS/Windows
+      shell: name=zsh
+      tags:
+        - zsh
+    - name: Change shell
+      shell: chsh -s `which zsh`
+      tags:
+        - zsh
+    - name: Install ohmyzsh
+      shell: curl -L https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh | sh
+      when: "'/.oh-my-zsh' is file"
+      tags:
+        - zsh
+    - name: Install zsh plugin auto-suggestions
+      ansible.builtin.git:
+        repo: 'https://github.com/zsh-users/zsh-autosuggestions.git'
+        dest: '~/.oh-my-zsh/plugins/zsh-autosuggestions'
+      tags:
+        - zsh
+    - name: update our zshrc
+      shell: sed -i 's/(git/(git zsh-autosuggestions/' ../../../.zshrc
+      tags:
+        - zsh
+    - name: Install tmux
+      apt: name=tmux
+      tags:
+        - tmux
+    - name: Install nodejs
+      shell: name=nodejs
+      tags:
+        - node
+    - name: Install npm
+      shell: name=npm
+      tags:
+        - node
+    - name: Typescript
+      shell: npm install -g typescript
+      tags:
+        - node
+>>>>>>> c0aaba7e3e4a0ec54d5dd9aa3264c06cf411de4d
