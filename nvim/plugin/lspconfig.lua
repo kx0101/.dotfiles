@@ -54,10 +54,7 @@ protocol.CompletionItemKind = {
 }
 
 -- Set up completion using nvim_cmp with LSP source
-local capabilities = require('cmp_nvim_lsp').update_capabilities(
-  vim.lsp.protocol.make_client_capabilities()
-)
-
+local capabilities = require('cmp_nvim_lsp').default_capabilities();
 
 nvim_lsp.flow.setup {
   on_attach = on_attach,
@@ -67,14 +64,24 @@ nvim_lsp.flow.setup {
 
 nvim_lsp.tsserver.setup {
   on_attach = on_attach,
-  filetypes = { "typescript", "typescriptreact", "typescript.tsx" }, 
+  filetypes = { "typescript", "typescriptreact", "typescript.tsx" },
   cmd = { "typescript-language-server", "--stdio" },
   capabilities = capabilities
+}
+
+nvim_lsp.rust_analyzer.setup {
+  on_attach = on_attach,
+  flags = lsp_flags,
+  settings = {
+    ["rust-analyzer"] = {}
+  }
 }
 
 nvim_lsp.sourcekit.setup {
   on_attach = on_attach,
 }
+
+nvim_lsp.pyright.setup {}
 
 nvim_lsp.sumneko_lua.setup {
   on_attach = on_attach,

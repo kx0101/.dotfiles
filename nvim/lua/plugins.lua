@@ -35,10 +35,11 @@ packer.startup(function(use)
   use 'norcalli/nvim-colorizer.lua'
   use 'folke/zen-mode.nvim'
   use 'akinsho/nvim-bufferline.lua'
+  use { "ellisonleao/gruvbox.nvim" }
   -- use 'github/copilot.vim'
-  use { 
-     'neoclide/coc.nvim',
-     branch = 'release'
+  use {
+    'neoclide/coc.nvim',
+    branch = 'release'
   }
 
   use 'folke/tokyonight.nvim'
@@ -52,4 +53,5 @@ packer.startup(function(use)
   }
   use 'nvim-treesitter/nvim-treesitter-context'
   use 'dyng/ctrlsf.vim'
+  use 'ThePrimeagen/vim-be-good'
 end)
