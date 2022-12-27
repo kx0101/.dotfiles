@@ -14,10 +14,10 @@ return require('packer').startup(function(use)
   }
 
   use({
-	  'rose-pine/neovim',
-	  as = 'rose-pine',
+	  'folke/tokyonight.nvim',
+	  as = 'tokyonight',
 	  config = function()
-		  vim.cmd('colorscheme rose-pine')
+		  vim.cmd('colorscheme tokyonight')
 	  end
   })
 
@@ -51,4 +51,8 @@ return require('packer').startup(function(use)
 
   use{"github/copilot.vim"}
 
+  use {
+      "windwp/nvim-autopairs",
+      config = function() require("nvim-autopairs").setup {} end
+  }
 end)
