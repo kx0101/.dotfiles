@@ -1,7 +1,6 @@
 local test = {
-  hello
-}
+  hello}
 
 
 
-local text = "i"
+local     text = "i"
