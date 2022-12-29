@@ -12,5 +12,5 @@ export const uiSchema = {
   "ui:labels": { namespace: "hello" },
   "ui:options": {
     key: "value",
-},
+  },
 };
