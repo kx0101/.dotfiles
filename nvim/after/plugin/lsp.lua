@@ -86,7 +86,7 @@ nvim_lsp.jsonls.setup {
 require("lspconfig").sumneko_lua.setup({
   cmd = { "/home/kx0101/lua-language-server/bin/lua-language-server" },
   commands = {
-      Format = {
+    Format = {
       function()
         vim.lsp.buf.format()
       end,
