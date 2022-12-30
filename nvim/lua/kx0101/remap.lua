@@ -32,7 +32,8 @@ vim.keymap.set("n", "<leader>x", "<cmd>!chmod +x %<CR>", { silent = true })
 
 vim.keymap.set("n", "<leader>fmt", function() vim.lsp.buf.format({ async = true }) end, { noremap = true, silent = true })
 
-vim.keymap.set("n", "<leader>tt", "<cmd>:FloatermNew<CR>")
+vim.keymap.set("n", "<leader>tt",
+  "<cmd>:FloatermNew --height=0.9 --width=0.9 --wintype=float --name=floaterm1 --position=center --autoclose=2<CR>")
 
 vim.g.clipboard = {
   name = 'win32yank-wsl',
