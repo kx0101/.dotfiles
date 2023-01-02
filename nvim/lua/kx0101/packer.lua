@@ -65,9 +65,16 @@ return require('packer').startup(function(use)
   }
 
   use {
-    'numToStr/Comment.nvim',
+    'terrortylor/nvim-comment',
     config = function()
-      require('Comment').setup()
+      require('nvim_comment').setup()
+    end
+  }
+
+  use {
+    'lewis6991/gitsigns.nvim',
+    config = function()
+      require('gitsigns').setup()
     end
   }
 
