@@ -37,13 +37,13 @@ capabilities.textDocument.completion.completionItem.snippetSupport = true
 local on_attach = function(client, bufnr)
   local opts = { buffer = bufnr, noremap = false }
 
-  vim.api.nvim_create_autocmd("BufWritePre", {
-    pattern = { "javascript", "*.svelte", "javascriptreact", "typescript", "typescriptreact", "*.tsx", "*.ts", "*.jsx",
-      "*.lua", "*.js" },
-    callback = function()
-      vim.lsp.buf.format({ async = true })
-    end
-  })
+  -- vim.api.nvim_create_autocmd("BufWritePre", {
+  --   pattern = { "javascript", "*.svelte", "javascriptreact", "typescript", "typescriptreact", "*.tsx", "*.ts", "*.jsx",
+  --     "*.lua", "*.js" },
+  --   callback = function()
+  --     vim.lsp.buf.format({ async = true })
+  --   end
+  -- })
 
   vim.keymap.set("n", "gd", function() vim.lsp.buf.definition() end, opts)
   vim.keymap.set("n", "K", function() vim.lsp.buf.hover() end, opts)
@@ -129,13 +129,13 @@ require("lspconfig").sumneko_lua.setup({
 lsp.on_attach(function(client, bufnr)
   local opts = { buffer = bufnr, noremap = false }
 
-  vim.api.nvim_create_autocmd("BufWritePre", {
-    pattern = { "javascript", "*.svelte", "javascriptreact", "typescript", "typescriptreact", "*.tsx", "*.ts", "*.jsx",
-      "*.lua", "*.js" },
-    callback = function()
-      vim.lsp.buf.format({ async = true })
-    end
-  })
+  -- vim.api.nvim_create_autocmd("BufWritePre", {
+  --   pattern = { "javascript", "*.svelte", "javascriptreact", "typescript", "typescriptreact", "*.tsx", "*.ts", "*.jsx",
+  --     "*.lua", "*.js" },
+  --   callback = function()
+  --     vim.lsp.buf.format({ async = true })
+  --   end
+  -- })
 
   vim.keymap.set("n", "gd", function() vim.lsp.buf.definition() end, opts)
   vim.keymap.set("n", "K", function() vim.lsp.buf.hover() end, opts)
