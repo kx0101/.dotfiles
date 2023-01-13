@@ -8,6 +8,7 @@ const user: User = {
   id: "234324",
 };
 
+
 export const uiSchema = {
   "ui:labels": { namespace: "hello" },
   "ui:options": {
