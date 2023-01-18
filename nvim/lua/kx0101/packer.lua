@@ -14,10 +14,10 @@ return require('packer').startup(function(use)
   }
 
   use({
-    'morhetz/gruvbox',
-    as = 'gruvbox',
+    'rose-pine/neovim',
+    as = 'rose-pine',
     config = function()
-      vim.cmd('colorscheme gruvbox')
+      vim.cmd('colorscheme rose-pine')
     end
   })
 
