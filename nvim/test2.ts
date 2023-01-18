@@ -6,12 +6,13 @@ interface User {
 const user: User = {
   name: 1234,
   id: "234324",
+  hello: "alskjdflaskj"
 };
 
 
 export const uiSchema = {
   "ui:labels": { namespace: "hello" },
   "ui:options": {
-    key: "value",
+    key: "ajskldfjakl",
   },
 };

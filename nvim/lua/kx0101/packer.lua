@@ -59,10 +59,12 @@ return require('packer').startup(function(use)
   use { 'windwp/nvim-ts-autotag' }
   use("jose-elias-alvarez/null-ls.nvim")
   use { 'voldikss/vim-floaterm' }
-  use {
-    'nvim-lualine/lualine.nvim',
-    requires = { 'kyazdani42/nvim-web-devicons', opt = true }
+
+  use { 'nvim-tree/nvim-web-devicons',
+    config = function() require("nvim-web-devicons").setup {} end
   }
+
+  use { 'nvim-lualine/lualine.nvim' }
 
   use {
     'terrortylor/nvim-comment',
