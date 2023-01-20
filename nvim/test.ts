@@ -6,7 +6,7 @@ interface User {
 const user: User = {
   name: 1234,
   id: "234324",
-sdfsadf
+sdfsadf: 'aksdjflsaj'
 };
 
 
