@@ -20,6 +20,17 @@ lsp.configure('sumneko_lua', {
   }
 })
 
+lsp.configure('rust_analyzer', {
+  settings = {
+    ["rust-analyzer"] = {
+      check = {
+        command = "clippy",
+        extraArgs = { "--all", "--", "-W", "clippy::all" }
+      }
+    }
+  }
+})
+
 local cmp = require('cmp')
 local cmp_select = { behavior = cmp.SelectBehavior.Select }
 local cmp_mappings = lsp.defaults.cmp_mappings({
@@ -51,18 +62,18 @@ lsp.set_preferences({
 lsp.on_attach(function(client, bufnr)
   local opts = { buffer = bufnr, remap = false }
 
-  if client.name == "eslint" then
-    vim.cmd.LspStop('eslint')
-    return
-  end
-
-  vim.api.nvim_create_autocmd("BufWritePre", {
-    pattern = { "javascript", "*.svelte", "javascriptreact", "typescript", "typescriptreact", "*.tsx", "*.ts", "*.jsx",
-      "*.lua", "*.js" },
-    callback = function()
-      vim.lsp.buf.format({ async = true })
-    end
-  })
+  -- if client.name == "eslint" then
+  --   vim.cmd.LspStop('eslint')
+  --   return
+  -- end
+  --
+  -- vim.api.nvim_create_autocmd("BufWritePre", {
+  --   pattern = { "javascript", "*.svelte", "javascriptreact", "typescript", "typescriptreact", "*.tsx", "*.ts", "*.jsx",
+  --     "*.lua", "*.js" },
+  --   callback = function()
+  --     vim.lsp.buf.format({ async = true })
+  --   end
+  -- })
 
   vim.keymap.set("n", "gd", vim.lsp.buf.definition, opts)
   vim.keymap.set("n", "K", vim.lsp.buf.hover, opts)

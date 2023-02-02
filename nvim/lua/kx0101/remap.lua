@@ -34,16 +34,17 @@ vim.keymap.set("n", "<leader>fmt", function() vim.lsp.buf.format({ async = true 
 
 vim.keymap.set("n", "<leader>tt",
   "<cmd>:FloatermNew --height=0.9 --width=0.9 --wintype=float --name=floaterm1 --position=center --autoclose=2<CR>")
+vim.opt.clipboard = "unnamedplus"
 
 vim.g.clipboard = {
-  name = 'win32yank-wsl',
+  name = "win32yank-wsl",
   copy = {
-    ['+'] = 'win32yank.exe -i --crlf',
-    ['*'] = 'win32yank.exe -i --crlf',
+    ['+'] = 'clip.exe',
+    ['*'] = 'clip.exe',
   },
   paste = {
-    ['+'] = 'win32yank.exe -o --lf',
-    ['*'] = 'win32yank.exe -o --lf',
+    ['+'] = 'powershell.exe -c [Console]::Out.Write($(Get-Clipboard -Raw).tostring().replace("`r", ""))',
+    ['*'] = 'powershell.exe -c [Console]::Out.Write($(Get-Clipboard -Raw).tostring().replace("`r", ""))',
   },
   cache_enabled = 0,
 }
