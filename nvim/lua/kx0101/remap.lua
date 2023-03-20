@@ -34,7 +34,8 @@ vim.keymap.set("n", "<leader>fmt", function() vim.lsp.buf.format({ async = true 
 
 vim.keymap.set("n", "<leader>tt",
   "<cmd>:FloatermNew --height=0.9 --width=0.9 --wintype=float --name=floaterm1 --position=center --autoclose=2<CR>")
-vim.opt.clipboard = "unnamedplus"
+
+-- vim.opt.clipboard = "unnamedplus"
 
 vim.g.clipboard = {
   name = "win32yank-wsl",
