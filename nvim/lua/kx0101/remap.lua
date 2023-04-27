@@ -33,19 +33,30 @@ vim.keymap.set("n", "<leader>x", "<cmd>!chmod +x %<CR>", { silent = true })
 vim.keymap.set("n", "<leader>fmt", function() vim.lsp.buf.format({ async = true }) end, { noremap = true, silent = true })
 
 vim.keymap.set("n", "<leader>tt",
-  "<cmd>:FloatermNew --height=0.9 --width=0.9 --wintype=float --name=floaterm1 --position=center --autoclose=2<CR>")
-
--- vim.opt.clipboard = "unnamedplus"
+    "<cmd>:FloatermNew --height=0.9 --width=0.9 --wintype=float --name=floaterm1 --position=center --autoclose=2<CR>")
 
 vim.g.clipboard = {
-  name = "win32yank-wsl",
-  copy = {
-    ['+'] = 'clip.exe',
-    ['*'] = 'clip.exe',
-  },
-  paste = {
-    ['+'] = 'powershell.exe -c [Console]::Out.Write($(Get-Clipboard -Raw).tostring().replace("`r", ""))',
-    ['*'] = 'powershell.exe -c [Console]::Out.Write($(Get-Clipboard -Raw).tostring().replace("`r", ""))',
-  },
-  cache_enabled = 0,
+    name = "xclip-xfce4-clipman",
+    copy = {
+        ['+'] = "xclip -selection clipboard",
+        ['*'] = "xclip -selection clipboard",
+    },
+    paste = {
+        ['+'] = "xclip -selection clipboard -o",
+        ['*'] = "xclip -selection clipboard -o",
+    },
+    cache_enabled = 1,
 }
+
+-- vim.g.clipboard = {
+--   name = "win32yank-wsl",
+--   copy = {
+--     ['+'] = 'clip.exe',
+--     ['*'] = 'clip.exe',
+--   },
+--   paste = {
+--     ['+'] = 'powershell.exe -c [Console]::Out.Write($(Get-Clipboard -Raw).tostring().replace("`r", ""))',
+--     ['*'] = 'powershell.exe -c [Console]::Out.Write($(Get-Clipboard -Raw).tostring().replace("`r", ""))',
+--   },
+--   cache_enabled = 0,
+-- }
