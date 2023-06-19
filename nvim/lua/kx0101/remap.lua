@@ -32,8 +32,13 @@ vim.keymap.set("n", "<leader>x", "<cmd>!chmod +x %<CR>", { silent = true })
 
 vim.keymap.set("n", "<leader>fmt", function() vim.lsp.buf.format({ async = true }) end, { noremap = true, silent = true })
 
-vim.keymap.set("n", "<leader>tt",
-    "<cmd>:FloatermNew --height=0.9 --width=0.9 --wintype=float --name=floaterm1 --position=center --autoclose=2<CR>")
+vim.keymap.set("n", "<leader>pw", "<cmd>vsplit<CR>")
+vim.keymap.set("n", "<leader>pe", "<cmd>split<CR>")
+
+vim.keymap.set("n", "<C-h>", "<C-w>h")
+vim.keymap.set("n", "<C-j>", "<C-w>j")
+vim.keymap.set("n", "<C-k>", "<C-w>k")
+vim.keymap.set("n", "<C-l>", "<C-w>l")
 
 vim.g.clipboard = {
     name = "xclip-xfce4-clipman",

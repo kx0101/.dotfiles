@@ -29,6 +29,13 @@ lsp.configure('rust_analyzer', {
     }
 })
 
+lsp.use('solidity', {
+    cmd = { 'nomicfoundation-solidity-language-server', '--stdio' },
+    filetypes = { 'solidity' },
+    root_dir = require("lspconfig.util").find_git_ancestor,
+    single_file_support = true,
+})
+
 local cmp = require('cmp')
 local cmp_select = { behavior = cmp.SelectBehavior.Select }
 local cmp_mappings = lsp.defaults.cmp_mappings({
@@ -57,6 +64,10 @@ lsp.set_preferences({
     }
 })
 
+-- vim.api.nvim_command([[
+--   autocmd BufWritePre *.java lua vim.loop.spawn("mvn", { args = { "clean", "install" }})
+-- ]])
+
 lsp.on_attach(function(client, bufnr)
     local opts = { buffer = bufnr, remap = false }
 
@@ -64,14 +75,6 @@ lsp.on_attach(function(client, bufnr)
     --   vim.cmd.LspStop('eslint')
     --   return
     -- end
-    --
-    -- vim.api.nvim_create_autocmd("BufWritePre", {
-    --   pattern = { "javascript", "*.svelte", "javascriptreact", "typescript", "typescriptreact", "*.tsx", "*.ts", "*.jsx",
-    --     "*.lua", "*.js" },
-    --   callback = function()
-    --     vim.lsp.buf.format({ async = true })
-    --   end
-    -- })
 
     vim.keymap.set("n", "gd", vim.lsp.buf.definition, opts)
     vim.keymap.set("n", "K", vim.lsp.buf.hover, opts)

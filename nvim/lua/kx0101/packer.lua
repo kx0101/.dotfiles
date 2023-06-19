@@ -14,10 +14,10 @@ return require('packer').startup(function(use)
     }
 
     use({
-        'EdenEast/nightfox.nvim',
-        as = 'nightfox',
+        'rebelot/kanagawa.nvim',
+        as = 'kanagawa',
         config = function()
-            vim.cmd('colorscheme nightfox')
+            vim.cmd('colorscheme kanagawa-dragon')
         end
     })
 
@@ -82,4 +82,9 @@ return require('packer').startup(function(use)
 
     use 'simrat39/rust-tools.nvim'
     use 'mfussenegger/nvim-jdtls'
+    use { 'anuvyklack/pretty-fold.nvim',
+        config = function()
+            require('pretty-fold').setup()
+        end
+    }
 end)
