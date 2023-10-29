@@ -36,6 +36,13 @@ lsp.use('solidity', {
     single_file_support = true,
 })
 
+lsp.use('omnisharp', {
+    enable_roslyn_analysers = true,
+    enable_import_completion = true,
+    organize_imports_on_format = true,
+    filetypes = { 'cs', 'vb', 'csproj', 'sln', 'slnx', 'props' },
+})
+
 local cmp = require('cmp')
 local cmp_select = { behavior = cmp.SelectBehavior.Select }
 local cmp_mappings = lsp.defaults.cmp_mappings({

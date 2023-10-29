@@ -1,5 +1,5 @@
 function ColorMyPencils(color)
-    color = color or "kanagawa"
+    color = color or "kanagawa-wave"
     vim.cmd.colorscheme(color)
 
     vim.api.nvim_set_hl(0, "Normal", { bg = "none" })
@@ -15,8 +15,11 @@ require('kanagawa').setup({
     keywordStyle = { italic = true },
     statementStyle = { bold = true },
     terminalColors = true,
+    theme = "wave",
     background = {
-        dark = "dragon",
+        dark = "wave",
         light = "lotus"
     },
 })
+
+vim.cmd("colorscheme kanagawa")

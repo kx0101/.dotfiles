@@ -17,7 +17,7 @@ return require('packer').startup(function(use)
         'rebelot/kanagawa.nvim',
         as = 'kanagawa',
         config = function()
-            vim.cmd('colorscheme kanagawa-dragon')
+            vim.cmd('colorscheme kanagawa-wave')
         end
     })
 
@@ -26,6 +26,7 @@ return require('packer').startup(function(use)
     use('nvim-treesitter/playground')
     use('theprimeagen/harpoon')
     use('mbbill/undotree')
+    use('tpope/vim-fugitive')
 
     use {
         'VonHeikemen/lsp-zero.nvim',

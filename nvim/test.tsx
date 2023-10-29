@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 
 export const Test() {
-  const [hello, setHello] = useState(false);
+    const [hello, setHello] = useState(false);
 
-  return (
-    <div>
-      <h2>Hello</h2>
-    </div>
-  )
+    return (
+        <div>
+            <h2>Hello</h2>
+        </div>
+    )
 }
