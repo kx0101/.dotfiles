@@ -3,14 +3,13 @@ local util = require('lspconfig/util')
 
 lsp.preset("recommended")
 
-require('mason').setup({})
-require('mason-lspconfig').setup({
-    ensure_installed = {'tsserver', 'rust_analyzer', 'lua_ls'},
-    handlers = {
-        lsp.default_setup,
-    },
+lsp.ensure_installed({
+    'tsserver',
+    'eslint',
+    'lua_ls',
+    'jdtls',
+    'rust_analyzer',
 })
-
 
 lsp.configure('lua_ls', {
     Lua = {
@@ -37,13 +36,6 @@ lsp.use('solidity', {
     single_file_support = true,
 })
 
-lsp.use('omnisharp', {
-    enable_roslyn_analysers = true,
-    enable_import_completion = true,
-    organize_imports_on_format = true,
-    filetypes = { 'cs', 'vb', 'csproj', 'sln', 'slnx', 'props' },
-})
-
 local cmp = require('cmp')
 local cmp_select = { behavior = cmp.SelectBehavior.Select }
 local cmp_mappings = lsp.defaults.cmp_mappings({
@@ -58,7 +50,7 @@ local cmp_mappings = lsp.defaults.cmp_mappings({
 cmp_mappings['<Tab>'] = nil
 cmp_mappings['<S-Tab>'] = nil
 
-cmp.setup({
+lsp.setup_nvim_cmp({
     mapping = cmp_mappings
 })
 

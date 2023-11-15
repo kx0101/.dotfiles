@@ -13,19 +13,11 @@ return require('packer').startup(function(use)
         requires = { { 'nvim-lua/plenary.nvim' } }
     }
 
-    -- use({
-    --     'rebelot/kanagawa.nvim',
-    --     as = 'kanagawa',
-    --     config = function()
-    --         vim.cmd('colorscheme kanagawa-wave')
-    --     end
-    -- })
-
     use({
-        'rose-pine/neovim',
-        as = 'rose-pine',
+        'rebelot/kanagawa.nvim',
+        as = 'kanagawa',
         config = function()
-            vim.cmd('colorscheme rose-pine')
+            vim.cmd('colorscheme kanagawa-dragon')
         end
     })
 
@@ -34,7 +26,6 @@ return require('packer').startup(function(use)
     use('nvim-treesitter/playground')
     use('theprimeagen/harpoon')
     use('mbbill/undotree')
-    use('tpope/vim-fugitive')
 
     use {
         'VonHeikemen/lsp-zero.nvim',

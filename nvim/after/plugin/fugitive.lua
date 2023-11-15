@@ -3,7 +3,11 @@ vim.keymap.set('n', '<leader>gd', [[:vertical Gdiff<CR>]], { noremap = true, sil
 vim.keymap.set('n', '<leader>gm', [[:vertical Gdiffsplit!<CR>]], { noremap = true, silent = true })
 vim.keymap.set('n', '<leader>gb', [[:Git blame<CR>]], { noremap = true, silent = true })
 vim.keymap.set('n', '<leader>gc', [[:Git commit<CR>]])
-vim.keymap.set('n', '<leader>gp', [[:Git push<CR>]])
+
+vim.api.nvim_set_keymap('n', '<leader>gp',
+    [[:lua vim.cmd("Git push origin " .. vim.fn.systemlist("git rev-parse --abbrev-ref HEAD")[1])<CR>]],
+    { noremap = true, silent = true })
+
 vim.keymap.set('n', '<leader>ga', [[:Git add .<CR>]])
 
 -- Get changes from "ours" into the working file
