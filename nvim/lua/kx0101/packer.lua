@@ -96,4 +96,6 @@ return require('packer').startup(function(use)
             require('pretty-fold').setup()
         end
     }
+
+    use 'hoffs/omnisharp-extended-lsp.nvim'
 end)
