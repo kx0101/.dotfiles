@@ -1,5 +1,4 @@
 function ColorMyPencils(color)
-    -- color = color or "kanagawa-wave"
     color = color or "rose-pine"
     vim.cmd.colorscheme(color)
 
@@ -13,8 +12,7 @@ ColorMyPencils()
 --     compile = false,
 --     undercurl = true,
 --     commentStyle = { italic = true },
---     keywordStyle = { italic = true },
---     statementStyle = { bold = true },
+--     keywordStyle = { italic = true }, statementStyle = { bold = true },
 --     terminalColors = true,
 --     theme = "wave",
 --     background = {

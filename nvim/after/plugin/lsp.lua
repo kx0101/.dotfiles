@@ -3,20 +3,32 @@ local util = require('lspconfig/util')
 
 lsp.preset("recommended")
 
-require('mason').setup({})
-require('mason-lspconfig').setup({
-    ensure_installed = {'tsserver', 'rust_analyzer', 'lua_ls'},
-    handlers = {
-        lsp.default_setup,
-    },
+lsp.ensure_installed({
+    'tsserver',
+    'eslint',
+    'lua_ls',
+    'jdtls',
+    'rust_analyzer',
 })
-
 
 lsp.configure('lua_ls', {
     Lua = {
         workspace = { checkThirdParty = false },
         telemetry = { enable = false },
     },
+})
+
+lsp.configure('gopls', {
+    settings = {
+        gopls = {
+            experimentalPostfixCompletions = true,
+            analyses = {
+                unusedparams = true,
+                shadow = true,
+            },
+            staticcheck = true,
+        }
+    }
 })
 
 lsp.configure('rust_analyzer', {
@@ -42,6 +54,9 @@ lsp.use('omnisharp', {
     enable_import_completion = true,
     organize_imports_on_format = true,
     filetypes = { 'cs', 'vb', 'csproj', 'sln', 'slnx', 'props' },
+    handlers = {
+        ["textDocument/definition"] = require('omnisharp_extended').handler
+    },
 })
 
 local cmp = require('cmp')
@@ -58,7 +73,7 @@ local cmp_mappings = lsp.defaults.cmp_mappings({
 cmp_mappings['<Tab>'] = nil
 cmp_mappings['<S-Tab>'] = nil
 
-cmp.setup({
+lsp.setup_nvim_cmp({
     mapping = cmp_mappings
 })
 
