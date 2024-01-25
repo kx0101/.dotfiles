@@ -1,18 +1,18 @@
 interface User {
-  name: string;
-  id: number;
+    name: string;
+    id: number;
 }
 
 const user: User = {
-  name: 1234,
-  id: "234324",
-  hello: "alskjdflaskj"
+    name: 1234,
+    id: "234324",
+    hello: "alskjdflaskj"
 };
 
 
 export const uiSchema = {
-  "ui:labels": { namespace: "hello" },
-  "ui:options": {
-    key: "ajskldfjakl",
-  },
+    "ui:labels": { namespace: "hello" },
+    "ui:options": {
+        key: "ajskldfjakl",
+    },
 };

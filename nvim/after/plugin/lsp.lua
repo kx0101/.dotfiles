@@ -1,14 +1,9 @@
 local lsp = require("lsp-zero")
-local util = require('lspconfig/util')
-
 lsp.preset("recommended")
 
-lsp.ensure_installed({
-    'tsserver',
-    'eslint',
-    'lua_ls',
-    'jdtls',
-    'rust_analyzer',
+require('mason').setup({})
+require('mason-lspconfig').setup({
+    ensure_installed = { 'tsserver', 'rust_analyzer', 'eslint', 'lua_ls', 'jdtls', 'omnisharp' },
 })
 
 lsp.configure('lua_ls', {
@@ -42,12 +37,7 @@ lsp.configure('rust_analyzer', {
     }
 })
 
-lsp.use('solidity', {
-    cmd = { 'nomicfoundation-solidity-language-server', '--stdio' },
-    filetypes = { 'solidity' },
-    root_dir = require("lspconfig.util").find_git_ancestor,
-    single_file_support = true,
-})
+lsp.configure('tsserver', {})
 
 lsp.use('omnisharp', {
     enable_roslyn_analysers = true,
@@ -73,7 +63,7 @@ local cmp_mappings = lsp.defaults.cmp_mappings({
 cmp_mappings['<Tab>'] = nil
 cmp_mappings['<S-Tab>'] = nil
 
-lsp.setup_nvim_cmp({
+cmp.setup({
     mapping = cmp_mappings
 })
 
