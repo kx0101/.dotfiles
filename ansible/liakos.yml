@@ -1,23 +1,41 @@
 - hosts: localhost
-  vars:
-    personal: "{{ lookup('env', 'HOME') }}/personal"
-  pre_tasks:
-    - name: Update apt
-      become: true
-      apt:
-        force_apt_get: true
-        update_cache: true
-        state: present
-      tags:
-        - install
-        - core
+  gather_facts: yes
+  vars_files:
+    - vars/vars.yml
+
   tasks:
-    - include: tasks/git-setup.yml
-    - include: tasks/core-setup.yml
-    - include: tasks/node-setup.yml
-    - include: tasks/npm-packages.yml
-    - include: tasks/zsh-setup.yml
-    - include: tasks/nvim-setup.yml
-    - include: tasks/brave.yml
-    - include: tasks/productivity-tools.yml
-    - include: tasks/lsp.yml
+    - name: Install Git
+      include_tasks: tasks/git.yml
+
+    # - name: Install Neovim
+    #   include_tasks: tasks/neovim.yml
+
+    - name: Install Corretto JDK 22
+      include_tasks: tasks/corretto_jdk.yml
+
+    - name: Install NPM, TypeScript, and TS-Node
+      include_tasks: tasks/npm.yml
+
+    - name: Install PNPM
+      include_tasks: tasks/pnpm.yml
+
+    - name: Install Zsh and set it as default shell
+      include_tasks: tasks/zsh.yml
+
+    - name: Install Tmux
+      include_tasks: tasks/tmux.yml
+
+    - name: Install Docker
+      include_tasks: tasks/docker.yml
+
+    - name: Install Go and Go tools
+      include_tasks: tasks/go.yml
+
+    - name: Install FZF
+      include_tasks: tasks/fzf.yml
+
+    - name: Install Ripgrep
+      include_tasks: tasks/ripgrep.yml
+
+    - name: Install Xclip
+      include_tasks: tasks/xclip.yml

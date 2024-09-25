@@ -1,0 +1,8 @@
+- name: Install Git
+  command: "/opt/homebrew/bin/brew install git"
+
+- name: Configure Git credentials
+  shell: |
+    git config --global user.name "{{ git_user }}"
+    git config --global user.email "{{ git_email }}"
+  when: git_user is defined and git_email is defined

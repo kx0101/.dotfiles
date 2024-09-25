@@ -1,0 +1,13 @@
+- name: Install NPM
+  command: "/opt/homebrew/bin/brew install npm"
+
+- name: Install N
+  command: "/opt/homebrew/bin/brew install n"
+
+- name: Install TypeScript and TS-Node globally
+  npm:
+    name: "{{ item }}"
+    global: yes
+  loop:
+    - typescript
+    - ts-node

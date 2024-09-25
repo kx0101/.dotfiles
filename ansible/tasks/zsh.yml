@@ -1,0 +1,25 @@
+- name: Install Zsh
+  command: "/opt/homebrew/bin/brew install zsh"
+  args:
+    warn: false
+
+- name: Change default shell to Zsh
+  shell: |
+    chsh -s $(which zsh)
+
+- name: Add Zsh configuration to .zshrc
+  blockinfile:
+    path: "~/.zshrc"
+    block: |
+      # Custom Aliases
+      alias vim='nvim'
+      alias tmux-sessionizer="~/.dotfiles/scripts/tmux-sessionizer.sh"
+      alias luamake='~/lua-language-server/3rd/luamake/luamake'
+
+      # Environment Variables
+      export PATH="/usr/local/bin/node:$PATH"
+      export GOROOT="/usr/local/go"
+      export PATH="$PATH:$GOROOT/bin"
+      export GOPATH="$HOME/go"
+      export PATH="$PATH:/usr/local/go/bin"
+  when: not ansible_env.SHELL.endswith('zsh')

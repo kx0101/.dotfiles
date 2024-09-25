@@ -1,1 +1,2 @@
 ./ansible/node_modules
+./nvim/plugin/packer_compiled.lua

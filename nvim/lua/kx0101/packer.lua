@@ -8,10 +8,11 @@ return require('packer').startup(function(use)
     use 'wbthomason/packer.nvim'
 
     use {
-        'nvim-telescope/telescope.nvim', tag = '0.1.0',
-        -- or                            , branch = '0.1.x',
-        requires = { { 'nvim-lua/plenary.nvim' } }
+        'nvim-telescope/telescope.nvim', tag = '0.1.4',
+        requires = { 'nvim-lua/plenary.nvim', }
     }
+
+    use { 'nvim-telescope/telescope-file-browser.nvim' }
 
     -- use({
     --     'rebelot/kanagawa.nvim',
@@ -21,13 +22,47 @@ return require('packer').startup(function(use)
     --     end
     -- })
 
+    -- use {
+    --     "catppuccin/nvim",
+    --     as = "catppuccin",
+    --     config = function()
+    --         vim.cmd('colorscheme catppuccin')
+    --     end
+    -- }
+
     use({
-        'rose-pine/neovim',
-        as = 'rose-pine',
+        'sainnhe/gruvbox-material',
+        as = 'gruvbox-material',
         config = function()
-            vim.cmd('colorscheme rose-pine')
+            vim.cmd('colorscheme gruvbox-material')
         end
     })
+
+    -- use({
+    --     'rose-pine/neovim',
+    --     as = 'rose-pine',
+    --     config = function()
+    --         vim.cmd('colorscheme rose-pine')
+    --     end
+    -- })
+
+    -- use({
+    --     'sainnhe/everforest',
+    --     as = 'everforest',
+    --     config = function()
+    --         vim.cmd('colorscheme everforest')
+    --     end
+    -- })
+
+
+    use {
+        'anurag3301/nvim-platformio.lua',
+        requires = {
+            { 'akinsho/nvim-toggleterm.lua' },
+            { 'nvim-telescope/telescope.nvim' },
+            { 'nvim-lua/plenary.nvim' },
+        }
+    }
 
     use('nvim-treesitter/nvim-treesitter', { run = ':TSUpdate' })
 
@@ -39,6 +74,7 @@ return require('packer').startup(function(use)
 
     use {
         'VonHeikemen/lsp-zero.nvim',
+        branch = 'v4.x',
         requires = {
             -- LSP Support
             { 'neovim/nvim-lspconfig' },
@@ -59,7 +95,21 @@ return require('packer').startup(function(use)
         }
     }
 
-    use { "github/copilot.vim" }
+    use {
+        'nvim-java/nvim-java',
+        requires = {
+            'nvim-java/lua-async-await',
+            'nvim-java/nvim-java-core',
+            'nvim-java/nvim-java-test',
+            'nvim-java/nvim-java-dap',
+            'nvim-java/nvim-java-refactor',
+            'MunifTanjim/nui.nvim',
+            'mfussenegger/nvim-dap',
+            'mfussenegger/nvim-jdtls',
+        },
+    }
+
+    -- use { "github/copilot.vim" }
 
     use {
         "windwp/nvim-autopairs",
@@ -91,7 +141,6 @@ return require('packer').startup(function(use)
     }
 
     use 'simrat39/rust-tools.nvim'
-    use 'mfussenegger/nvim-jdtls'
     use { 'anuvyklack/pretty-fold.nvim',
         config = function()
             require('pretty-fold').setup()

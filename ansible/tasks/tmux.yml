@@ -1,0 +1,14 @@
+- name: Install Tmux
+  command: "/opt/homebrew/bin/brew install tmux"
+
+- name: Copy tmux configuration from current directory
+  copy:
+    src: ".tmux.conf"
+    dest: "~/"
+    remote_src: yes
+
+- name: Install Tmux Themepack (jimeh/tmux-themepack)
+  git:
+    repo: 'https://github.com/jimeh/tmux-themepack.git'
+    dest: "~/.tmux-themepack"
+    version: main

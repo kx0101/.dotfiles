@@ -1,0 +1,5 @@
+git_user: "kx0101"
+git_email: "liakos.koulaxis@yahoo.com"
+
+homebrew_prefix: "/opt/homebrew"
+homebrew_executable: "/opt/homebrew/bin/brew"

@@ -1,14 +1,40 @@
 local lsp = require("lsp-zero")
-local util = require('lspconfig/util')
 
-lsp.preset("recommended")
+require('mason').setup({})
+require('mason-lspconfig').setup({
+    ensure_installed = {
+        'eslint',
+        -- 'tsserver',
+        'lua_ls',
+        'sqls',
+        -- 'jdtls',
+        'rust_analyzer',
+        'gopls',
+    },
+    handlers = {
+        function(server_name)
+            require('lspconfig')[server_name].setup({})
+        end
+    }
+})
 
-lsp.ensure_installed({
-    'tsserver',
-    'eslint',
-    'lua_ls',
-    'jdtls',
-    'rust_analyzer',
+require("toggleterm").setup({
+    shell = "/bin/bash",
+})
+
+lsp.configure('gopls', {
+    cmd = { 'gopls' },
+    filetypes = { 'go', 'gomod' },
+    root_dir = require("lspconfig.util").root_pattern("go.mod", ".git"),
+    settings = {
+        gopls = {
+            analyses = {
+                unusedparams = true,
+                shadow = true,
+            },
+            staticcheck = true,
+        }
+    },
 })
 
 lsp.configure('lua_ls', {
@@ -18,22 +44,12 @@ lsp.configure('lua_ls', {
     },
 })
 
-lsp.configure('gopls', {
-    settings = {
-        gopls = {
-            experimentalPostfixCompletions = true,
-            analyses = {
-                unusedparams = true,
-                shadow = true,
-            },
-            staticcheck = true,
-        }
-    }
-})
-
 lsp.configure('rust_analyzer', {
     settings = {
         ["rust-analyzer"] = {
+            cargo = {
+                allFeatures = true,
+            },
             check = {
                 command = "clippy",
                 extraArgs = { "--all", "--", "-W", "clippy::all" }
@@ -60,35 +76,40 @@ lsp.use('omnisharp', {
 })
 
 local cmp = require('cmp')
-local cmp_select = { behavior = cmp.SelectBehavior.Select }
-local cmp_mappings = lsp.defaults.cmp_mappings({
-    ['<C-p>'] = cmp.mapping.select_prev_item(cmp_select),
-    ['<C-n>'] = cmp.mapping.select_next_item(cmp_select),
-    ['<CR>'] = cmp.mapping.confirm({ select = true }),
-    ["<C-Space>"] = cmp.mapping.complete(),
-})
 
--- disable completion with tab
--- this helps with copilot setup
-cmp_mappings['<Tab>'] = nil
-cmp_mappings['<S-Tab>'] = nil
-
-lsp.setup_nvim_cmp({
-    mapping = cmp_mappings
-})
-
-lsp.set_preferences({
-    suggest_lsp_servers = false,
-    sign_icons = {
-        error = 'E',
-        warn = 'W',
-        hint = 'H',
-        info = 'I'
-    }
+cmp.setup({
+    sources = {
+        { name = 'nvim_lsp' },
+    },
+    mapping = {
+        ['<CR>'] = cmp.mapping.confirm({ select = false }),
+        ['<C-e>'] = cmp.mapping.abort(),
+        ['<Up>'] = cmp.mapping.select_prev_item({ behavior = 'select' }),
+        ['<Down>'] = cmp.mapping.select_next_item({ behavior = 'select' }),
+        ['<C-p>'] = cmp.mapping(function()
+            if cmp.visible() then
+                cmp.select_prev_item({ behavior = 'insert' })
+            else
+                cmp.complete()
+            end
+        end),
+        ['<C-n>'] = cmp.mapping(function()
+            if cmp.visible() then
+                cmp.select_next_item({ behavior = 'insert' })
+            else
+                cmp.complete()
+            end
+        end),
+    },
+    snippet = {
+        expand = function(args)
+            require('luasnip').lsp_expand(args.body)
+        end,
+    },
 })
 
 -- vim.api.nvim_command([[
---   autocmd BufWritePre *.java lua vim.loop.spawn("mvn", { args = { "clean", "install" }})
+--   autocmd BufWritePre *.java lua vim.loop.spawn("mvn", { args = { "compile" }})
 -- ]])
 
 lsp.on_attach(function(client, bufnr)

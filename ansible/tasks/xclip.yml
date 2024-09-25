@@ -1,0 +1,2 @@
+- name: Install Xclip
+  command: "/opt/homebrew/bin/brew install xclip"
