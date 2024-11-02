@@ -1,23 +1,42 @@
 - hosts: localhost
-  gather_facts: yes
+  become: yes
+
   vars_files:
     - vars/vars.yml
 
+  pre_tasks:
+    - name: Get the username running the deploy
+      command: whoami
+      register: username
+      become: false
+
+    - name: Set global username variable
+      set_fact:
+        deploy_user: "{{ username.stdout }}"
+
   tasks:
+    - name: Update apt and upgrade system
+      apt:
+        update_cache: yes
+        upgrade: yes
+
     - name: Install Git
       include_tasks: tasks/git.yml
 
-    # - name: Install Neovim
-    #   include_tasks: tasks/neovim.yml
+    - name: Install oh-my-zsh
+      include_tasks: tasks/ohmyzsh.yml
+
+    - name: Install Neovim
+      include_tasks: tasks/neovim.yml
+
+    - name: Install Rust
+      include_tasks: tasks/rust.yml
 
     - name: Install Corretto JDK 22
       include_tasks: tasks/corretto_jdk.yml
 
     - name: Install NPM, TypeScript, and TS-Node
       include_tasks: tasks/npm.yml
-
-    - name: Install PNPM
-      include_tasks: tasks/pnpm.yml
 
     - name: Install Zsh and set it as default shell
       include_tasks: tasks/zsh.yml
@@ -37,5 +56,5 @@
     - name: Install Ripgrep
       include_tasks: tasks/ripgrep.yml
 
-    - name: Install Xclip
-      include_tasks: tasks/xclip.yml
+    - name: Install Hack Nerd Font
+      include_tasks: tasks/nerd-font.yml

@@ -1,7 +1,43 @@
-- name: Install Go
-  command: "/opt/homebrew/bin/brew install go"
+- name: Ensure dependencies are installed
+  apt:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - curl
+    - tar
 
-- name: Install Go tools
-  shell: |
-    go install golang.org/x/tools/cmd/godoc@latest
-    go install golang.org/x/tools/cmd/guru@latest
+- name: Download Go 1.23.0
+  get_url:
+    url: "https://golang.org/dl/go1.23.0.linux-amd64.tar.gz"
+    dest: "/tmp/go1.23.0.linux-amd64.tar.gz"
+    mode: '0644'
+
+- name: Remove any existing Go installation
+  file:
+    path: "/usr/local/go"
+    state: absent
+
+- name: Extract Go archive
+  unarchive:
+    src: "/tmp/go1.23.0.linux-amd64.tar.gz"
+    dest: "/usr/local"
+    remote_src: yes
+
+- name: Set up Go environment variables
+  copy:
+    dest: /etc/profile.d/go.sh
+    content: |
+      export PATH=$PATH:/usr/local/go/bin
+
+- name: Apply Go environment variables
+  shell: source /etc/profile.d/go.sh
+  args:
+    executable: /bin/bash
+
+- name: Verify Go installation
+  command: /usr/local/go/bin/go version
+  register: go_version
+
+- name: Print Go version
+  debug:
+    msg: "Go version installed: {{ go_version.stdout }}"

@@ -1,0 +1,25 @@
+- name: Download and install Rust
+  shell: |
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+  args:
+    executable: /bin/zsh
+  environment:
+    CARGO_HOME: "/home/{{ deploy_user }}/.cargo"
+    RUSTUP_HOME: "/home/{{ deploy_user }}/.rustup"
+
+- name: Add Rust to PATH in .zshrc
+  lineinfile:
+    path: "/home/{{ deploy_user }}/.zshrc"
+    line: 'export PATH="$HOME/.cargo/bin:$PATH"'
+    create: yes
+    state: present
+
+- name: Add Rust environment variables to .zshrc
+  blockinfile:
+    path: "/home/{{ deploy_user }}/.zshrc"
+    block: |
+      export CARGO_HOME="$HOME/.cargo"
+      export RUSTUP_HOME="$HOME/.rustup"
+      export PATH="$CARGO_HOME/bin:$PATH"
+    create: yes
+    state: present

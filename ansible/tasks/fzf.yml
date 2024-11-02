@@ -1,6 +1,4 @@
 - name: Install FZF
-  command: "/opt/homebrew/bin/brew install fzf"
-
-- name: Install FZF key bindings
-  shell: |
-    $(brew --prefix)/opt/fzf/install --all
+  apt:
+    name: fzf
+    state: present

@@ -1,2 +1,4 @@
 - name: Install Ripgrep
-  command: "/opt/homebrew/bin/brew install ripgrep"
+  apt:
+    name: ripgrep
+    state: present

@@ -1,24 +1,23 @@
-- name: Clone Neovim repo
-  git:
-    repo: 'https://github.com/neovim/neovim.git'
-    dest: /tmp/neovim
-    version: v0.10.0
+- name: Add Neovim PPA
+  apt_repository:
+    repo: ppa:neovim-ppa/stable
+    state: present
 
-- name: Build Neovim
-  shell: |
-    make CMAKE_BUILD_TYPE=Release
-    sudo make install
-  args:
-    chdir: /tmp/neovim
+- name: Install Neovim
+  apt:
+    name: neovim
+    state: present
 
 - name: Install Packer (wbthomason/packer.nvim)
   git:
     repo: 'https://github.com/wbthomason/packer.nvim'
-    dest: "~/.local/share/nvim/site/pack/packer/start/packer.nvim"
-    version: main
+    dest: "/home/{{ deploy_user }}/.local/share/nvim/site/pack/packer/start/packer.nvim"
+    version: master
+    depth: 1
 
 - name: Copy Neovim configuration from current directory
   copy:
-    src: "nvim"
-    dest: "~/.config"
-    remote_src: yes
+    src: "../nvim"
+    dest: "/home/{{ deploy_user }}/.config/"
+    mode: '0755'
+    remote_src: no

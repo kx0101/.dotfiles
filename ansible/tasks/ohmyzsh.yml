@@ -1,0 +1,26 @@
+- name: Check if Oh My Zsh is already installed
+  stat:
+    path: "/home/{{ deploy_user }}/.oh-my-zsh"
+  register: oh_my_zsh_installed
+
+- name: Install Oh My Zsh with default robbyrussell theme
+  shell: |
+    RUNZSH=no CHSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+  args:
+    executable: /bin/zsh
+  when: not oh_my_zsh_installed.stat.exists
+
+- name: Change default shell to Zsh
+  user:
+    name: "{{ ansible_env.USER }}"
+    shell: /bin/zsh
+
+- name: Verify Oh My Zsh installation
+  stat:
+    path: "/home/{{ deploy_user }}/.oh-my-zsh"
+  register: oh_my_zsh_check
+
+- name: Print Oh My Zsh installation result
+  debug:
+    msg: "Oh My Zsh installed successfully"
+  when: oh_my_zsh_check.stat.exists
