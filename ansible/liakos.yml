@@ -36,7 +36,7 @@
     - name: Install Corretto JDK 22
       include_tasks: tasks/corretto_jdk.yml
 
-    - name: Install NPM, TypeScript, and TS-Node
+    - name: Install NPM, TypeScript, and tsnode
       include_tasks: tasks/npm.yml
 
     - name: Install Zsh and set it as default shell
