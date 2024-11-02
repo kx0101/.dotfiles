@@ -6,9 +6,22 @@
 - name: Configure Git global user name
   command: git config --global user.name "{{ git_user }}"
   become: yes
-  become_user: "{{ deploy_user }}"  
+  become_user: "{{ deploy_user }}"
 
 - name: Configure Git global user email
   command: git config --global user.email "{{ git_email }}"
+  become: yes
+  become_user: "{{ deploy_user }}"
+
+- name: Configure Git to store credentials
+  command: git config --global credential.helper store
+  become: yes
+  become_user: "{{ deploy_user }}"
+
+- name: Store GitHub token in Git credentials
+  copy:
+    content: "https://{{ git_user }}:{{ github_token }}@github.com\n"
+    dest: "/home/{{ deploy_user }}/.git-credentials"
+    mode: '0600'
   become: yes
   become_user: "{{ deploy_user }}"
