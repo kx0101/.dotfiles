@@ -1,43 +1,51 @@
-- name: Ensure dependencies are installed
+- name: Ensure required packages are installed
   apt:
-    name: "{{ item }}"
+    name:
+      - curl
+      - tar
     state: present
-  loop:
-    - curl
-    - tar
+    update_cache: yes
 
-- name: Download Go 1.23.0
+- name: Download Go binary
   get_url:
-    url: "https://golang.org/dl/go1.23.0.linux-amd64.tar.gz"
-    dest: "/tmp/go1.23.0.linux-amd64.tar.gz"
+    url: https://go.dev/dl/go1.23.0.linux-amd64.tar.gz
+    dest: /tmp/go1.23.0.linux-amd64.tar.gz
     mode: '0644'
 
-- name: Remove any existing Go installation
-  file:
-    path: "/usr/local/go"
+- name: Remove any previous Go installation
+  ansible.builtin.file:
+    path: /usr/local/go
     state: absent
 
-- name: Extract Go archive
-  unarchive:
-    src: "/tmp/go1.23.0.linux-amd64.tar.gz"
-    dest: "/usr/local"
+- name: Extract Go archive to /usr/local
+  ansible.builtin.unarchive:
+    src: /tmp/go1.23.0.linux-amd64.tar.gz
+    dest: /usr/local
     remote_src: yes
 
-- name: Set up Go environment variables
-  copy:
-    dest: /etc/profile.d/go.sh
-    content: |
-      export PATH=$PATH:/usr/local/go/bin
+- name: Ensure Go binary is in PATH for Zsh
+  lineinfile:
+    path: ~/.zshrc
+    line: 'export PATH=$PATH:/usr/local/go/bin'
+    state: present
+    create: yes
+    validate: 'grep -q "^export PATH=.*$" %s || echo "export PATH=$PATH:/usr/local/go/bin"'
 
-- name: Apply Go environment variables
-  shell: source /etc/profile.d/go.sh
+- name: Ensure Zsh is used as the default shell (if not already)
+  user:
+    name: "{{ ansible_env.USER }}"
+    shell: /usr/bin/zsh
+
+- name: Source Zsh config
+  shell: "source ~/.zshrc"
   args:
-    executable: /bin/bash
+    executable: /bin/zsh
+  ignore_errors: yes  
 
 - name: Verify Go installation
   command: /usr/local/go/bin/go version
-  register: go_version
+  register: go_version_output
 
-- name: Print Go version
+- name: Display Go version
   debug:
-    msg: "Go version installed: {{ go_version.stdout }}"
+    msg: "{{ go_version_output.stdout }}"
