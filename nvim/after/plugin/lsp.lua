@@ -6,7 +6,7 @@ require('mason-lspconfig').setup({
         'eslint',
         -- 'tsserver',
         'lua_ls',
-        'sqls',
+        -- 'sqls',
         -- 'jdtls',
         'rust_analyzer',
         'gopls',

@@ -22,20 +22,20 @@ return require('packer').startup(function(use)
     --     end
     -- })
 
-    -- use {
-    --     "catppuccin/nvim",
-    --     as = "catppuccin",
-    --     config = function()
-    --         vim.cmd('colorscheme catppuccin')
-    --     end
-    -- }
+    use {
+        "catppuccin/nvim",
+        as = "catppuccin",
+        config = function()
+            vim.cmd('colorscheme catppuccin')
+        end
+    }
 
     use({
         'sainnhe/gruvbox-material',
         as = 'gruvbox-material',
-        config = function()
-            vim.cmd('colorscheme gruvbox-material')
-        end
+        -- config = function()
+        --     vim.cmd('colorscheme gruvbox-material')
+        -- end
     })
 
     -- use({
