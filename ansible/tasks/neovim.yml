@@ -1,4 +1,5 @@
 - name: Install dependencies for building Neovim
+  become: no
   apt:
     name:
       - ninja-build
@@ -21,23 +22,27 @@
     state: present
 
 - name: Download Neovim 0.10.2
+  become: no
   get_url:
     url: "https://github.com/neovim/neovim/releases/download/v0.10.2/nvim-linux64.tar.gz"
     dest: "/tmp/nvim-linux64.tar.gz"
 
 - name: Extract Neovim 0.10.2
+  become: no
   unarchive:
     src: "/tmp/nvim-linux64.tar.gz"
     dest: "/usr/local"
     remote_src: yes
 
 - name: Create a symlink for Neovim
+  become: no
   file:
     src: "/usr/local/nvim-linux64/bin/nvim"
     dest: "/usr/local/bin/nvim"
     state: link
 
 - name: Install Packer (wbthomason/packer.nvim)
+  become: no
   git:
     repo: 'https://github.com/wbthomason/packer.nvim'
     dest: "/home/{{ deploy_user }}/.local/share/nvim/site/pack/packer/start/packer.nvim"

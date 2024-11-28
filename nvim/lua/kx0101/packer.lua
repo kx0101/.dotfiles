@@ -22,13 +22,13 @@ return require('packer').startup(function(use)
     --     end
     -- })
 
-    use {
-        "catppuccin/nvim",
-        as = "catppuccin",
-        config = function()
-            vim.cmd('colorscheme catppuccin')
-        end
-    }
+    -- use {
+    --     "catppuccin/nvim",
+    --     as = "catppuccin",
+    --     config = function()
+    --         vim.cmd('colorscheme catppuccin')
+    --     end
+    -- }
 
     use({
         'sainnhe/gruvbox-material',
@@ -38,13 +38,13 @@ return require('packer').startup(function(use)
         -- end
     })
 
-    -- use({
-    --     'rose-pine/neovim',
-    --     as = 'rose-pine',
-    --     config = function()
-    --         vim.cmd('colorscheme rose-pine')
-    --     end
-    -- })
+    use({
+        'rose-pine/neovim',
+        as = 'rose-pine',
+        config = function()
+            vim.cmd('colorscheme rose-pine')
+        end
+    })
 
     -- use({
     --     'sainnhe/everforest',
