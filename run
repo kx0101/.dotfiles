@@ -1,1 +1,3 @@
-ansible-playbook liakos.yml --ask-become-pass --ask-vault-pass
+#!/bin/bash
+
+ansible-playbook ansible/liakos.yml --ask-become-pass --ask-vault-pass
