@@ -1,25 +1,11 @@
 - name: Install Zsh
+  become: yes
   apt:
     name: zsh
     state: present
 
-- name: Change default shell to Zsh
-  shell: chsh -s /usr/bin/zsh "{{ ansible_user_id }}"
-
-- name: Add Zsh configuration to .zshrc
-  blockinfile:
-    path: "/home/{{ deploy_user }}/.zshrc"
-    block: |
-      # Custom Aliases
-      alias vim='nvim'
-      alias tmux-sessionizer="~/.dotfiles/scripts/tmux-sessionizer.sh"
-      alias luamake='~/lua-language-server/3rd/luamake/luamake'
-
-      # Environment Variables
-      export PATH="/usr/local/bin/node:$PATH"
-      export GOROOT="/usr/local/go"
-      export PATH="$PATH:$GOROOT/bin"
-      export GOPATH="$HOME/go"
-      export PATH="$PATH:/usr/local/go/bin"
-  when: not ansible_env.SHELL.endswith('zsh')
-
+- name: Ensure Zsh is the default shell
+  become: yes
+  user:
+    name: "{{ ansible_user_id }}"
+    shell: /usr/bin/zsh

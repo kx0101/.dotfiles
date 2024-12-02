@@ -1,2 +1,17 @@
-- name: Install Xclip
-  command: "/opt/homebrew/bin/brew install xclip"
+- name: Update package cache
+  apt:
+    update_cache: yes
+
+- name: Install xclip (Debian/Ubuntu)
+  apt:
+    name: xclip
+    state: present
+
+- name: Verify xclip installation
+  command: xclip -version
+  register: xclip_version
+  ignore_errors: yes
+
+- name: Display xclip version
+  debug:
+    msg: "xclip is installed successfully!"

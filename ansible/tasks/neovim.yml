@@ -1,5 +1,24 @@
+- name: Remove Neovim installed via package manager
+  become: yes
+  apt:
+    name: neovim
+    state: absent
+  ignore_errors: yes
+
+- name: Remove existing Neovim installations (manual installations)
+  become: yes
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/usr/local/bin/nvim"
+    - "/usr/local/nvim-linux64"
+    - "/home/{{ deploy_user }}/.config/nvim"
+    - "/home/{{ deploy_user }}/.local/share/nvim"
+    - "/tmp/nvim-linux64.tar.gz"
+
 - name: Install dependencies for building Neovim
-  become: no
+  become: yes
   apt:
     name:
       - ninja-build
@@ -20,26 +39,36 @@
       - libfontconfig1-dev
       - libharfbuzz-dev
     state: present
+    update_cache: yes
 
 - name: Download Neovim 0.10.2
-  become: no
+  become: yes
   get_url:
     url: "https://github.com/neovim/neovim/releases/download/v0.10.2/nvim-linux64.tar.gz"
     dest: "/tmp/nvim-linux64.tar.gz"
 
 - name: Extract Neovim 0.10.2
-  become: no
+  become: yes
   unarchive:
     src: "/tmp/nvim-linux64.tar.gz"
     dest: "/usr/local"
     remote_src: yes
 
 - name: Create a symlink for Neovim
-  become: no
+  become: yes
   file:
     src: "/usr/local/nvim-linux64/bin/nvim"
     dest: "/usr/local/bin/nvim"
     state: link
+    force: yes
+
+- name: Verify Neovim version
+  command: nvim --version
+  register: neovim_version
+
+- name: Display installed Neovim version
+  debug:
+    msg: "Installed Neovim version: {{ neovim_version.stdout_lines[0] }}"
 
 - name: Install Packer (wbthomason/packer.nvim)
   become: no
@@ -48,11 +77,14 @@
     dest: "/home/{{ deploy_user }}/.local/share/nvim/site/pack/packer/start/packer.nvim"
     version: master
     depth: 1
+  become_user: "{{ deploy_user }}"
 
 - name: Copy Neovim configuration from current directory
+  become: no
   copy:
     src: "../nvim"
     dest: "/home/{{ deploy_user }}/.config/"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
     mode: '0755'
     remote_src: no
-
