@@ -1,3 +1,5 @@
+require("neodev").setup({})
+
 local lsp = require("lsp-zero")
 
 require('mason').setup({})
@@ -16,10 +18,6 @@ require('mason-lspconfig').setup({
             require('lspconfig')[server_name].setup({})
         end
     }
-})
-
-require("toggleterm").setup({
-    shell = "/bin/bash",
 })
 
 lsp.configure('gopls', {
@@ -56,13 +54,6 @@ lsp.configure('rust_analyzer', {
             }
         }
     }
-})
-
-lsp.use('solidity', {
-    cmd = { 'nomicfoundation-solidity-language-server', '--stdio' },
-    filetypes = { 'solidity' },
-    root_dir = require("lspconfig.util").find_git_ancestor,
-    single_file_support = true,
 })
 
 lsp.use('omnisharp', {
@@ -112,7 +103,7 @@ cmp.setup({
 --   autocmd BufWritePre *.java lua vim.loop.spawn("mvn", { args = { "compile" }})
 -- ]])
 
-lsp.on_attach(function(client, bufnr)
+lsp.on_attach(function(_client, bufnr)
     local opts = { buffer = bufnr, remap = false }
 
     -- if client.name == "eslint" then

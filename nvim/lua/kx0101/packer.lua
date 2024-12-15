@@ -48,6 +48,7 @@ return require('packer').startup(function(use)
     --     end
     -- })
 
+    use { "folke/neodev.nvim", opts = {} }
 
     use('nvim-treesitter/nvim-treesitter', { run = ':TSUpdate' })
     use('nvim-treesitter/playground')
@@ -105,7 +106,7 @@ return require('packer').startup(function(use)
     use 'simrat39/rust-tools.nvim'
     use { 'anuvyklack/pretty-fold.nvim',
         config = function()
-            require('pretty-fold').setup()
+            require('pretty-fold').setup({})
         end
     }
 end)
