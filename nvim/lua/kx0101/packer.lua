@@ -1,10 +1,4 @@
--- This file can be loaded by calling `lua require('plugins')` from your init.vim
-
--- Only required if you have packer configured as `opt`
-vim.cmd [[packadd packer.nvim]]
-
 return require('packer').startup(function(use)
-    -- Packer can manage itself
     use 'wbthomason/packer.nvim'
 
     use {
@@ -33,18 +27,18 @@ return require('packer').startup(function(use)
     use({
         'sainnhe/gruvbox-material',
         as = 'gruvbox-material',
-        -- config = function()
-        --     vim.cmd('colorscheme gruvbox-material')
-        -- end
-    })
-
-    use({
-        'rose-pine/neovim',
-        as = 'rose-pine',
         config = function()
-            vim.cmd('colorscheme rose-pine')
+            vim.cmd('colorscheme gruvbox-material')
         end
     })
+
+    -- use({
+    --     'rose-pine/neovim',
+    --     as = 'rose-pine',
+    --     config = function()
+    --         vim.cmd('colorscheme rose-pine')
+    --     end
+    -- })
 
     -- use({
     --     'sainnhe/everforest',
@@ -55,17 +49,7 @@ return require('packer').startup(function(use)
     -- })
 
 
-    use {
-        'anurag3301/nvim-platformio.lua',
-        requires = {
-            { 'akinsho/nvim-toggleterm.lua' },
-            { 'nvim-telescope/telescope.nvim' },
-            { 'nvim-lua/plenary.nvim' },
-        }
-    }
-
     use('nvim-treesitter/nvim-treesitter', { run = ':TSUpdate' })
-
     use('nvim-treesitter/playground')
     use('theprimeagen/harpoon')
     use('mbbill/undotree')
@@ -92,31 +76,9 @@ return require('packer').startup(function(use)
             -- Snippets
             { 'L3MON4D3/LuaSnip' },
             { 'rafamadriz/friendly-snippets' },
-        }
-    }
-
-    use {
-        'nvim-java/nvim-java',
-        requires = {
-            'nvim-java/lua-async-await',
-            'nvim-java/nvim-java-core',
-            'nvim-java/nvim-java-test',
-            'nvim-java/nvim-java-dap',
-            'nvim-java/nvim-java-refactor',
-            'MunifTanjim/nui.nvim',
-            'mfussenegger/nvim-dap',
-            'mfussenegger/nvim-jdtls',
         },
     }
 
-    -- use { "github/copilot.vim" }
-
-    use {
-        "windwp/nvim-autopairs",
-        config = function() require("nvim-autopairs").setup {} end
-    }
-
-    use { 'windwp/nvim-ts-autotag' }
     use("jose-elias-alvarez/null-ls.nvim")
     use { 'voldikss/vim-floaterm' }
 
