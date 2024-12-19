@@ -1,0 +1,117 @@
+" Set leader key
+let mapleader = " "
+
+" File Explorer (approximation, as vim.cmd.Ex isn't available)
+nnoremap <leader>pv :Explore<CR>
+
+" Moving lines in visual mode
+vnoremap J :m '>+1<CR>gv=gv
+vnoremap K :m '<-2<CR>gv=gv
+
+" Joining lines with cursor reposition
+nnoremap J mzJ`z
+
+" Keep cursor centered during scrolling
+nnoremap <C-d> <C-d>zz
+nnoremap <C-u> <C-u>zz
+
+" Keep search terms centered
+nnoremap n nzzzv
+nnoremap N Nzzzv
+
+" Paste without overwriting register
+xnoremap <leader>p "_dP
+
+" Yank to system clipboard
+nnoremap <leader>y "+y
+vnoremap <leader>y "+y
+nnoremap <leader>Y "+Y
+
+" Delete without yanking
+nnoremap <leader>d "_d
+vnoremap <leader>d "_d
+
+" Disable Ex mode
+nnoremap Q <Nop>
+
+" Quickfix list navigation
+nnoremap <C-k> :cnext<CR>zz
+nnoremap <C-j> :cprev<CR>zz
+
+" Location list navigation
+nnoremap <leader>k :lnext<CR>zz
+nnoremap <leader>j :lprev<CR>zz
+
+" Search and replace current word
+nnoremap <leader>s :%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>
+
+" Make current file executable
+nnoremap <leader>x :!chmod +x %<CR>
+
+" Split window mappings
+nnoremap <leader>pw :vsplit<CR>
+nnoremap <leader>pe :split<CR>
+
+" Window navigation
+nnoremap <C-h> <C-w>h
+nnoremap <C-j> <C-w>j
+nnoremap <C-k> <C-w>k
+nnoremap <C-l> <C-w>l
+
+" Line numbers
+set nu
+set relativenumber
+
+" Tabs and indentation
+set tabstop=4
+set softtabstop=4
+set shiftwidth=4
+set expandtab
+set smartindent
+
+" Wrapping
+set nowrap
+
+" Disable swapfile and backups
+set noswapfile
+set nobackup
+set undodir=~/.vim/undodir
+set undofile
+
+" Search behavior
+set nohlsearch
+set incsearch
+
+" Colors and visual settings
+set termguicolors
+set scrolloff=8
+set signcolumn=yes
+set isfname+=@-@
+set updatetime=50
+set colorcolumn=80
+
+" Folding
+set foldcolumn=1
+set foldlevel=99
+set foldlevelstart=99
+set foldenable
+
+" Highlight cursor line
+set cursorline
+
+nmap <leader>q :action GotoHarpoon1<cr>
+nmap <leader>w :action GotoHarpoon2<cr>
+nmap <leader>e :action GotoHarpoon3<cr>
+nmap <leader>f :action GotoHarpoon4<cr>
+
+nmap <leader>s :action ShowHarpoon<cr>
+nmap <leader>a :action AddToHarpoon<cr>
+
+" Toggle the project directory tree
+nnoremap <leader>pv :action ActivateProjectToolWindow<CR>
+
+" Search in all files
+nnoremap <leader>ps :action FindInPath<CR>
+
+" Search for a file by name
+nnoremap <leader>pf :action GotoFile<CR>
