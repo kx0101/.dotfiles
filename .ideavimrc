@@ -115,3 +115,6 @@ nnoremap <leader>ps :action FindInPath<CR>
 
 " Search for a file by name
 nnoremap <leader>pf :action GotoFile<CR>
+
+" Format file
+nnoremap <leader>fmt :action ReformatCode<CR>
