@@ -99,12 +99,12 @@ set foldenable
 " Highlight cursor line
 set cursorline
 
-nmap <leader>q :action GotoHarpoon1<cr>
-nmap <leader>w :action GotoHarpoon2<cr>
-nmap <leader>e :action GotoHarpoon3<cr>
-nmap <leader>f :action GotoHarpoon4<cr>
+nmap <C-q> :action GotoHarpoon1<cr>
+nmap <C-w> :action GotoHarpoon2<cr>
+nmap <C-e> :action GotoHarpoon3<cr>
+nmap <C-f> :action GotoHarpoon4<cr>
 
-nmap <leader>s :action ShowHarpoon<cr>
+nmap <C-s> :action ShowHarpoon<cr>
 nmap <leader>a :action AddToHarpoon<cr>
 
 " Toggle the project directory tree
