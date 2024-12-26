@@ -39,5 +39,8 @@
         "/home/kx0101/.local/share/nvim/site/pack/packer/start/playground/after",
         "/home/kx0101/.config/nvim/after",
         "${3rd}/luassert/library"
+    ],
+    "diagnostics.globals": [
+        "vim"
     ]
 }

@@ -8,6 +8,16 @@ return require('packer').startup(function(use)
 
     use { 'nvim-telescope/telescope-file-browser.nvim' }
 
+    use {
+        "folke/tokyonight.nvim",
+        lazy = false,
+        priority = 1000,
+        opts = {},
+        config = function()
+            vim.cmd('colorscheme tokyonight')
+        end
+    }
+
     -- use({
     --     'rebelot/kanagawa.nvim',
     --     as = 'kanagawa',
@@ -24,13 +34,13 @@ return require('packer').startup(function(use)
     --     end
     -- }
 
-    use({
-        'sainnhe/gruvbox-material',
-        as = 'gruvbox-material',
-        config = function()
-            vim.cmd('colorscheme gruvbox-material')
-        end
-    })
+    -- use({
+    --     'sainnhe/gruvbox-material',
+    --     as = 'gruvbox-material',
+    --     config = function()
+    --         vim.cmd('colorscheme gruvbox-material')
+    --     end
+    -- })
 
     -- use({
     --     'rose-pine/neovim',
@@ -56,13 +66,17 @@ return require('packer').startup(function(use)
     use('mbbill/undotree')
     use('tpope/vim-fugitive')
     use('Hoffs/omnisharp-extended-lsp.nvim')
+    use('saghen/blink.cmp')
+
+    use { 'neovim/nvim-lspconfig',
+        dependencies = { 'saghen/blink.cmp' },
+    }
 
     use {
         'VonHeikemen/lsp-zero.nvim',
         branch = 'v4.x',
         requires = {
             -- LSP Support
-            { 'neovim/nvim-lspconfig' },
             { 'williamboman/mason.nvim' },
             { 'williamboman/mason-lspconfig.nvim' },
 
@@ -80,7 +94,6 @@ return require('packer').startup(function(use)
         },
     }
 
-    use("jose-elias-alvarez/null-ls.nvim")
     use { 'voldikss/vim-floaterm' }
 
     use { 'nvim-tree/nvim-web-devicons',
