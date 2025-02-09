@@ -2,7 +2,23 @@ local dap = require("dap")
 local ui = require("dapui")
 
 require("dapui").setup()
--- require("dap-go").setup()
+
+local function get_target_framework(csproj_path)
+    local content = vim.fn.readfile(csproj_path)
+    for _, line in ipairs(content) do
+        local target = line:match("<TargetFramework>(.-)</TargetFramework>")
+        if target then
+            return target
+        end
+    end
+    return "net8.0"
+end
+
+local function joinpath(...)
+    local sep = package.config:sub(1, 1)
+    return table.concat({ ... }, sep)
+end
+
 
 dap.adapters.coreclr = {
     type = 'executable',
@@ -17,53 +33,51 @@ dap.configurations.cs = {
         request = 'launch',
         program = function()
             local cwd = vim.fn.getcwd()
-
-            local csproj_file = nil
+            local csproj_files = {}
 
             for _, file in ipairs(vim.fn.readdir(cwd)) do
                 if file:match("%.csproj$") then
-                    csproj_file = file
-                    break
+                    table.insert(csproj_files, file)
                 end
             end
 
-            if not csproj_file then
+            if #csproj_files == 0 then
                 error("No .csproj file found in " .. cwd)
             end
 
-            local project_name = csproj_file:gsub("%.csproj$", "")
+            local csproj_file
+            if #csproj_files > 1 then
+                csproj_file = csproj_files[vim.fn.inputlist(
+                    "Select a project: ",
+                    vim.tbl_map(function(f) return f end, csproj_files)
+                )]
+            else
+                csproj_file = csproj_files[1]
+            end
 
-            local dll_path = cwd .. "/bin/Debug/net8.0/" .. project_name .. ".dll"
+            local project_name = csproj_file:gsub("%.csproj$", "")
+            local csproj_path = joinpath(cwd, csproj_file)
+            local target_framework = get_target_framework(csproj_path)
+
+            local build_result = vim.fn.system('dotnet build')
+            if vim.v.shell_error ~= 0 then
+                error("Build failed: " .. build_result)
+            end
+
+            local dll_path = joinpath(cwd, "bin", "Debug", target_framework, project_name .. ".dll")
+            if vim.fn.filereadable(dll_path) == 0 then
+                error("DLL not found: " .. dll_path)
+            end
 
             return dll_path
         end,
     },
 }
 
-local elixir_ls_debugger = vim.fn.exepath "elixir-ls-debugger"
-if elixir_ls_debugger ~= "" then
-    dap.adapters.mix_task = {
-        type = "executable",
-        command = elixir_ls_debugger,
-    }
-
-    dap.configurations.elixir = {
-        {
-            type = "mix_task",
-            name = "phoenix server",
-            task = "phx.server",
-            request = "launch",
-            projectDir = "${workspaceFolder}",
-            exitAfterTaskReturns = false,
-            debugAutoInterpretAllModules = false,
-        },
-    }
-end
-
 vim.keymap.set("n", "<leader>b", dap.toggle_breakpoint)
 vim.keymap.set("n", "<leader>gtc", dap.run_to_cursor)
 
--- Eval var under cursor
+-- eval var under cursor
 vim.keymap.set("n", "<leader>?", function()
     require("dapui").eval(nil, { enter = true })
 end)

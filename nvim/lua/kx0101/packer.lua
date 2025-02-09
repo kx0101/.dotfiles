@@ -8,15 +8,15 @@ return require('packer').startup(function(use)
 
     use { 'nvim-telescope/telescope-file-browser.nvim' }
 
-    use {
-        "folke/tokyonight.nvim",
-        lazy = false,
-        priority = 1000,
-        opts = {},
-        config = function()
-            vim.cmd('colorscheme tokyonight')
-        end
-    }
+    -- use {
+    --     "folke/tokyonight.nvim",
+    --     lazy = false,
+    --     priority = 1000,
+    --     opts = {},
+    --     config = function()
+    --         vim.cmd('colorscheme tokyonight')
+    --     end
+    -- }
 
     -- use({
     --     'rebelot/kanagawa.nvim',
@@ -30,7 +30,7 @@ return require('packer').startup(function(use)
     --     "catppuccin/nvim",
     --     as = "catppuccin",
     --     config = function()
-    --         vim.cmd('colorscheme catppuccin')
+    --         vim.cmd('colorscheme catppuccin-macchiato')
     --     end
     -- }
 
@@ -42,13 +42,18 @@ return require('packer').startup(function(use)
     --     end
     -- })
 
-    -- use({
-    --     'rose-pine/neovim',
-    --     as = 'rose-pine',
-    --     config = function()
-    --         vim.cmd('colorscheme rose-pine')
-    --     end
-    -- })
+    use({
+        'rose-pine/neovim',
+        as = 'rose-pine',
+        config = function()
+            require('rose-pine').setup({
+                disable_background = true,
+                styles = {
+                    italic = false,
+                },
+            })
+        end
+    })
 
     -- use({
     --     'sainnhe/everforest',

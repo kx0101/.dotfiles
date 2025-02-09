@@ -8,7 +8,7 @@ end
 
 vim.o.background = "dark"
 
--- ColorMyPencils()
+ColorMyPencils()
 
 -- require('kanagawa').setup({
 --     compile = false,
