@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+sudo apt install -y git
+
+git config --global user.email "liakos.koulaxis@yahoo.com"
+git config --global user.name "kx0101"
+git config --global core.editor=nvim

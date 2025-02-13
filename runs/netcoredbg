@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+mkdir -p "$HOME/.local/netcoredbg"
+cd "$HOME/.local/netcoredbg"
+wget https://github.com/Samsung/netcoredbg/releases/latest/download/netcoredbg-linux-amd64.tar.gz -O netcoredbg.tar.gz
+tar -xzf netcoredbg.tar.gz && rm netcoredbg.tar.gz

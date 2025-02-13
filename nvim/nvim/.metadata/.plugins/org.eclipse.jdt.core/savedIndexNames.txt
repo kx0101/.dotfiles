@@ -1,2 +1,0 @@
-INDEX VERSION 1.133+/Users/elijahkoulaxis/.config/nvim/nvim/.metadata/.plugins/org.eclipse.jdt.core
-3842426239.index
