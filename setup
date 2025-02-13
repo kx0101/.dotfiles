@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+sudo apt -y update
+
+if ! command -v git &> /dev/null; then
+    sudo apt -y install git
+fi
+
+if [ ! -d $HOME/personal ]; then
+    mkdir $HOME/personal
+fi
+
+if [ ! -d $HOME/.local/bin ]; then
+    mkdir $HOME/.local/bin
+fi
+
+git clone https://github.com/kx0101/.dotfiles $HOME/personal/.dotfiles
+
+pushd $HOME/personal/.dotfiles
+./run
+popd

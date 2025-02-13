@@ -1,4 +1,0 @@
-- name: Install FZF
-  apt:
-    name: fzf
-    state: present
