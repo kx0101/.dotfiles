@@ -108,7 +108,7 @@ alias vim='nvim'
 alias dr='dotnet run'
 alias db='dotnet build'
 alias gs='git status'
-alias tmux-sessionizer="~/.dotfiles/scripts/tmux-sessionizer"
+alias tmux-sessionizer="~/personal/.dotfiles/scripts/tmux-sessionizer"
 alias luamake='~/lua-language-server/3rd/luamake/luamake'
 
 # Environment Variables
