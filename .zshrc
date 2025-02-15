@@ -112,9 +112,11 @@ alias tmux-sessionizer="~/personal/.dotfiles/scripts/tmux-sessionizer"
 alias luamake='~/lua-language-server/3rd/luamake/luamake'
 
 # Environment Variables
-export PATH="/usr/local/bin/node:$PATH"
+
+# Set up tool-specific roots
 export GOROOT="/usr/local/go"
 export GOPATH="$HOME/go"
-export PATH="$PATH:$GOROOT/bin:$GOPATH/bin:/usr/local/go/bin"
-export PATH="$HOME/.local/bin:$PATH"
-export PATH="$HOME/.cargo/bin:$PATH"
+export DOTNET_ROOT="$HOME/.dotnet"
+
+# Prepend development tool paths
+export PATH="$HOME/.dotnet:$HOME/.cargo/bin:$HOME/.local/bin:/usr/local/bin/node:$GOROOT/bin:$GOPATH/bin:$PATH"
