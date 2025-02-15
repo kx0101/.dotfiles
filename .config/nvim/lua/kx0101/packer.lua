@@ -44,15 +44,7 @@ return require('packer').startup(function(use)
 
     use({
         'rose-pine/neovim',
-        as = 'rose-pine',
-        config = function()
-            require('rose-pine').setup({
-                disable_background = true,
-                styles = {
-                    italic = false,
-                },
-            })
-        end
+        as = 'rose-pine'
     })
 
     -- use({
