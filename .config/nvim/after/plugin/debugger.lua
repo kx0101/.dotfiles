@@ -22,7 +22,7 @@ end
 
 dap.adapters.coreclr = {
     type = 'executable',
-    command = '$HOME/.local/netcoredbg/netcoredbg/netcoredbg',
+    command = os.getenv("HOME") .. '/.local/netcoredbg/netcoredbg/netcoredbg',
     args = { '--interpreter=vscode' }
 }
 
