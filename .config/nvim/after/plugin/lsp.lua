@@ -13,6 +13,7 @@ require('mason-lspconfig').setup({
         -- 'sqls',
         -- 'jdtls',
         'rust_analyzer',
+        'omnisharp',
         'gopls',
     },
     handlers = {
@@ -63,8 +64,11 @@ lsp.configure('rust_analyzer', {
 })
 
 lsp.use('omnisharp', {
+    cmd = { "dotnet", os.getenv("HOME") .. "/.omnisharp/OmniSharp.dll" },
+    root_dir = require("lspconfig").util.root_pattern("*.sln", "*.csproj"),
     enable_roslyn_analysers = true,
     enable_import_completion = true,
+    analyzeOpenDocumentsOnly = false,
     organize_imports_on_format = true,
     filetypes = { 'cs', 'vb', 'csproj', 'sln', 'slnx', 'props' },
     handlers = {
@@ -116,6 +120,8 @@ lsp.on_attach(function(_client, bufnr)
     local opts = { buffer = bufnr, remap = false }
 
     vim.keymap.set("n", "gd", vim.lsp.buf.definition, opts)
+    vim.keymap.set("n", "gD", vim.lsp.buf.declaration, opts)
+    vim.keymap.set("n", "gi", vim.lsp.buf.implementation, opts)
     vim.keymap.set("n", "K", vim.lsp.buf.hover, opts)
     vim.keymap.set("n", "<leader>vws", vim.lsp.buf.workspace_symbol, opts)
     vim.keymap.set("n", "<leader>vd", vim.diagnostic.open_float, opts)

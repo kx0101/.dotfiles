@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+mkdir -p ~/.omnisharp
+
+cd ~/.omnisharp
+curl -L https://github.com/OmniSharp/omnisharp-roslyn/releases/latest/download/omnisharp-linux-x64-net6.0.tar.gz -o omnisharp.tar.gz
+
+tar -xzf omnisharp.tar.gz
+rm omnisharp.tar.gz
