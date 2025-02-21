@@ -20,6 +20,7 @@ vim.keymap.set('n', '<leader>pg', function()
             height = 0.9,
             preview_width = 0.6,
         },
+        previewer = false,
     })
 end, { silent = true })
 
