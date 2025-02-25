@@ -120,3 +120,4 @@ export DOTNET_ROOT="$HOME/.dotnet"
 
 # Prepend development tool paths
 export PATH="$HOME/.dotnet:$HOME/.cargo/bin:$HOME/.local/bin:/usr/local/bin/node:$GOROOT/bin:$GOPATH/bin:$PATH"
+export PATH=/opt/zig:$PATH

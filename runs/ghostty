@@ -1,0 +1,64 @@
+#!/bin/bash
+
+set -e
+
+ZIG_VERSION="0.13.0"
+GHOSTTY_REPO="https://github.com/mitchellh/ghostty.git"
+
+INSTALL_DIR="$HOME/.local/bin"
+ZIG_DIR="$HOME/.zig"
+
+ARCH=$(uname -m)
+if [[ "$ARCH" == "x86_64" ]]; then
+    ZIG_ARCH="x86_64"
+elif [[ "$ARCH" == "aarch64" ]]; then
+    ZIG_ARCH="aarch64"
+else
+    echo "Unsupported architecture: $ARCH"
+    exit 1
+fi
+
+echo "Installing required dependencies..."
+sudo apt update && sudo apt install -y \
+    build-essential \
+    git \
+    curl \
+    unzip \
+    xz-utils \
+    libx11-dev \
+    libxi-dev \
+    libgl1-mesa-dev \
+    libfontconfig1-dev \
+    libxrandr-dev \
+    libxcursor-dev \
+    libxinerama-dev \
+    libwayland-dev \
+    libxkbcommon-dev \
+    wayland-protocols
+
+echo "Downloading Zig $ZIG_VERSION..."
+mkdir -p "$ZIG_DIR"
+cd "$ZIG_DIR"
+curl -LO "https://ziglang.org/download/$ZIG_VERSION/zig-linux-$ZIG_ARCH-$ZIG_VERSION.tar.xz"
+tar -xf "zig-linux-$ZIG_ARCH-$ZIG_VERSION.tar.xz" --strip-components=1
+
+export PATH="$ZIG_DIR:$PATH"
+echo 'export PATH="$HOME/.zig:$PATH"' >> "$HOME/.bashrc"
+echo "Zig $ZIG_VERSION installed successfully!"
+
+zig version
+
+echo "Cloning Ghostty repository..."
+cd "$HOME"
+git clone "$GHOSTTY_REPO"
+cd ghostty
+
+echo "Building Ghostty..."
+zig build -Doptimize=ReleaseFast
+
+echo "Installing Ghostty to $INSTALL_DIR..."
+mkdir -p "$INSTALL_DIR"
+cp zig-out/bin/ghostty "$INSTALL_DIR"
+
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+export PATH="$INSTALL_DIR:$PATH"

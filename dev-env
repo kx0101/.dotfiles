@@ -57,6 +57,7 @@ copy_file() {
 }
 
 copy_dir .config $HOME/.config
+copy_file .config $HOME/.config/ghostty
 copy_file .tmux.conf $HOME
 copy_file .ideavimrc $HOME
 copy_file .zshrc $HOME
