@@ -19,12 +19,15 @@ else
 fi
 
 echo "Installing required dependencies..."
-sudo apt update && sudo apt install -y \
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y \
     build-essential \
     git \
     curl \
     unzip \
     xz-utils \
+    libgtk-4-dev \
+    libglib2.0-dev \
     libx11-dev \
     libxi-dev \
     libgl1-mesa-dev \
@@ -34,7 +37,14 @@ sudo apt update && sudo apt install -y \
     libxinerama-dev \
     libwayland-dev \
     libxkbcommon-dev \
-    wayland-protocols
+    wayland-protocols \
+    blueprint-compiler \
+    x11-apps \
+    libadwaita-1-dev \
+    libpango1.0-dev \
+    libgdk-pixbuf2.0-dev \
+    libcairo2-dev \
+    libgraphene-1.0-dev
 
 echo "Downloading Zig $ZIG_VERSION..."
 mkdir -p "$ZIG_DIR"
@@ -62,3 +72,21 @@ cp zig-out/bin/ghostty "$INSTALL_DIR"
 
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
 export PATH="$INSTALL_DIR:$PATH"
+
+echo "Creating desktop application..."
+mkdir -p "$HOME/.local/share/applications"
+
+cat > "$DESKTOP_FILE" <<EOF
+[Desktop Entry]
+Name=Ghostty
+Comment=Fast terminal emulator
+Exec=$INSTALL_DIR/ghostty
+Icon=utilities-terminal
+Terminal=false
+Type=Application
+Categories=Utility;TerminalEmulator;
+EOF
+
+desktop-file-validate "$DESKTOP_FILE"
+
+update-desktop-database "$HOME/.local/share/applications"
