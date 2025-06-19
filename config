@@ -7,6 +7,7 @@ selection-background = "#2a283e"
 selection-foreground = "#e0def4"
 
 cursor-color = "#524f67"
+font-family = "Adwaita Sans"
 
 keybind = ctrl+shift+f=toggle_fullscreen
 

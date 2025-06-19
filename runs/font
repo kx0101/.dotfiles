@@ -5,3 +5,7 @@ cd ~/.local/share/fonts
 sudo wget -O "Hack.zip" "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/Hack.zip"
 sudo unzip Hack.zip && sudo rm Hack.zip
 fc-cache -fv
+
+# Adwaita
+sudo apt update
+sudo apt install gnome-themes-extra
