@@ -7,3 +7,13 @@ curl -L https://github.com/OmniSharp/omnisharp-roslyn/releases/latest/download/o
 
 tar -xzf omnisharp.tar.gz
 rm omnisharp.tar.gz
+
+cd ~/.omnisharp && touch omnisharp.json
+echo '{
+  "RoslynExtensionsOptions": {
+    "enableAnalyzersSupport": true
+  },
+  "FormattingOptions": {
+    "enableEditorConfigSupport": true
+  }
+}' > omnisharp.json
