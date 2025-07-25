@@ -1,0 +1,19 @@
+{
+  "MSBuild": {
+    "LoadProjectsOnDemand": false,
+    "UseBundledOnly": true,
+    "EnablePackageAutoRestore": true
+  },
+  "Mono": {
+    "UseGlobalMono": "never"
+  },
+  "RoslynExtensionsOptions": {
+    "EnableAnalyzersSupport": true,
+    "EnableImportCompletion": true,
+    "EnableAsyncCompletion": true
+  },
+  "FormattingOptions": {
+    "EnableEditorConfigSupport": true
+  }
+}
+
