@@ -215,6 +215,7 @@ _G.packer_plugins = {
     url = "https://github.com/Hoffs/omnisharp-extended-lsp.nvim"
   },
   ["packer.nvim"] = {
+    config = { "\27LJ\2\nŸ\1\0\0\4\0\6\0\t6\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\4\0005\3\3\0=\3\5\2B\0\2\1K\0\1\0\15registries\1\0\1\15registries\0\1\3\0\0&github:Crashdummyy/mason-registry$github:mason-org/mason-registry\nsetup\nmason\frequire\0" },
     loaded = true,
     path = "/home/elijahkx/.local/share/nvim/site/pack/packer/start/packer.nvim",
     url = "https://github.com/wbthomason/packer.nvim"
@@ -228,6 +229,19 @@ _G.packer_plugins = {
     loaded = true,
     path = "/home/elijahkx/.local/share/nvim/site/pack/packer/start/plenary.nvim",
     url = "https://github.com/nvim-lua/plenary.nvim"
+  },
+  ["rose-pine"] = {
+    loaded = true,
+    path = "/home/elijahkx/.local/share/nvim/site/pack/packer/start/rose-pine",
+    url = "https://github.com/rose-pine/neovim"
+  },
+  ["roslyn.nvim"] = {
+    config = { "\27LJ\2\nJ\0\2\6\0\3\0\b6\2\0\0'\4\1\0B\2\2\0029\2\2\2\18\4\0\0\18\5\1\0B\2\3\1K\0\1\0\22default_on_attach\rlsp-zero\frequire‰\6\1\0\a\0\29\0)6\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\4\0003\3\3\0=\3\5\0026\3\0\0'\5\6\0B\3\2\0029\3\a\3B\3\1\2=\3\b\0025\3\t\0006\4\n\0009\4\v\0049\4\f\4'\6\r\0B\4\2\2'\5\14\0&\4\5\4>\4\2\3=\3\15\0025\3\16\0=\3\17\0026\3\0\0'\5\18\0B\3\2\0029\3\19\3'\5\20\0'\6\21\0B\3\3\2=\3\22\0025\3\24\0005\4\23\0=\4\25\0035\4\26\0=\4\27\3=\3\28\2B\0\2\1K\0\1\0\rsettings\21csharp|code_lens\1\0\1'dotnet_enable_references_code_lens\2\23csharp|inlay_hints\1\0\2\21csharp|code_lens\0\23csharp|inlay_hints\0\1\0\2:csharp_enable_inlay_hints_for_implicit_variable_types\2;csharp_enable_inlay_hints_for_implicit_object_creation\2\rroot_dir\r*.csproj\n*.sln\17root_pattern\19lspconfig.util\14filetypes\1\3\0\0\acs\avb\bcmdM/mason/packages/roslyn/libexec/Microsoft.CodeAnalysis.LanguageServer.dll\tdata\fstdpath\afn\bvim\1\5\0\0\vdotnet\0\27--logLevel=Information\f--stdio\17capabilities\21get_capabilities\rlsp-zero\14on_attach\1\0\a\14on_attach\0\14filetypes\0\17capabilities\0\rroot_dir\0\rsettings\0\bcmd\0\17filewatching\vroslyn\0\nsetup\vroslyn\frequire\0" },
+    loaded = false,
+    needs_bufread = false,
+    only_cond = false,
+    path = "/home/elijahkx/.local/share/nvim/site/pack/packer/opt/roslyn.nvim",
+    url = "https://github.com/seblyng/roslyn.nvim"
   },
   ["rust-tools.nvim"] = {
     loaded = true,
@@ -243,12 +257,6 @@ _G.packer_plugins = {
     loaded = true,
     path = "/home/elijahkx/.local/share/nvim/site/pack/packer/start/telescope.nvim",
     url = "https://github.com/nvim-telescope/telescope.nvim"
-  },
-  ["tokyonight.nvim"] = {
-    config = { "\27LJ\2\n·\1\0\1\r\0\t\0\0266\1\0\0\18\3\0\0B\1\2\4X\4\19€6\6\1\0006\b\2\0009\b\3\b9\b\4\b)\t\0\0005\n\5\0=\5\6\nB\6\4\3\15\0\6\0X\b\t€+\b\1\0=\b\a\a6\b\2\0009\b\3\b9\b\b\b)\n\0\0\18\v\5\0\18\f\a\0B\b\4\1E\4\3\3R\4ë\127K\0\1\0\16nvim_set_hl\vitalic\tname\1\0\2\tname\0\tlink\1\16nvim_get_hl\bapi\bvim\npcall\vipairs]\0\0\3\1\1\0\4-\0\0\0005\2\0\0B\0\2\1K\0\1\0\2À\1\6\0\0\r@keyword\22@keyword.function\20@keyword.return\17@conditional\f@repeatˆ\2\1\2\b\0\14\0\0256\2\0\0'\4\1\0B\2\2\0029\2\2\2\18\4\1\0B\2\2\0016\2\3\0009\2\4\2'\4\5\0B\2\2\0013\2\6\0006\3\3\0009\3\a\0039\3\b\3'\5\t\0005\6\n\0003\a\v\0=\a\f\6B\3\3\0016\3\3\0009\3\4\3'\5\r\0B\3\2\0012\0\0€K\0\1\0\26doautocmd ColorScheme\rcallback\0\1\0\2\fpattern\15tokyonight\rcallback\0\16ColorScheme\24nvim_create_autocmd\bapi\0\27colorscheme tokyonight\bcmd\bvim\nsetup\15tokyonight\frequire\0" },
-    loaded = true,
-    path = "/home/elijahkx/.local/share/nvim/site/pack/packer/start/tokyonight.nvim",
-    url = "https://github.com/folke/tokyonight.nvim"
   },
   undotree = {
     loaded = true,
@@ -272,26 +280,27 @@ time([[Defining packer_plugins]], false)
 time([[Setup for markdown-preview.nvim]], true)
 try_loadstring("\27LJ\2\n=\0\0\2\0\4\0\0056\0\0\0009\0\1\0005\1\3\0=\1\2\0K\0\1\0\1\2\0\0\rmarkdown\19mkdp_filetypes\6g\bvim\0", "setup", "markdown-preview.nvim")
 time([[Setup for markdown-preview.nvim]], false)
--- Config for: nvim-web-devicons
-time([[Config for nvim-web-devicons]], true)
-try_loadstring("\27LJ\2\nC\0\0\3\0\3\0\a6\0\0\0'\2\1\0B\0\2\0029\0\2\0004\2\0\0B\0\2\1K\0\1\0\nsetup\22nvim-web-devicons\frequire\0", "config", "nvim-web-devicons")
-time([[Config for nvim-web-devicons]], false)
 -- Config for: nvim-comment
 time([[Config for nvim-comment]], true)
 try_loadstring("\27LJ\2\n:\0\0\3\0\3\0\0066\0\0\0'\2\1\0B\0\2\0029\0\2\0B\0\1\1K\0\1\0\nsetup\17nvim_comment\frequire\0", "config", "nvim-comment")
 time([[Config for nvim-comment]], false)
--- Config for: tokyonight.nvim
-time([[Config for tokyonight.nvim]], true)
-try_loadstring("\27LJ\2\n·\1\0\1\r\0\t\0\0266\1\0\0\18\3\0\0B\1\2\4X\4\19€6\6\1\0006\b\2\0009\b\3\b9\b\4\b)\t\0\0005\n\5\0=\5\6\nB\6\4\3\15\0\6\0X\b\t€+\b\1\0=\b\a\a6\b\2\0009\b\3\b9\b\b\b)\n\0\0\18\v\5\0\18\f\a\0B\b\4\1E\4\3\3R\4ë\127K\0\1\0\16nvim_set_hl\vitalic\tname\1\0\2\tname\0\tlink\1\16nvim_get_hl\bapi\bvim\npcall\vipairs]\0\0\3\1\1\0\4-\0\0\0005\2\0\0B\0\2\1K\0\1\0\2À\1\6\0\0\r@keyword\22@keyword.function\20@keyword.return\17@conditional\f@repeatˆ\2\1\2\b\0\14\0\0256\2\0\0'\4\1\0B\2\2\0029\2\2\2\18\4\1\0B\2\2\0016\2\3\0009\2\4\2'\4\5\0B\2\2\0013\2\6\0006\3\3\0009\3\a\0039\3\b\3'\5\t\0005\6\n\0003\a\v\0=\a\f\6B\3\3\0016\3\3\0009\3\4\3'\5\r\0B\3\2\0012\0\0€K\0\1\0\26doautocmd ColorScheme\rcallback\0\1\0\2\fpattern\15tokyonight\rcallback\0\16ColorScheme\24nvim_create_autocmd\bapi\0\27colorscheme tokyonight\bcmd\bvim\nsetup\15tokyonight\frequire\0", "config", "tokyonight.nvim")
-time([[Config for tokyonight.nvim]], false)
 -- Config for: gitsigns.nvim
 time([[Config for gitsigns.nvim]], true)
 try_loadstring("\27LJ\2\nQ\0\0\3\0\4\0\a6\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\3\0B\0\2\1K\0\1\0\1\0\1\23current_line_blame\2\nsetup\rgitsigns\frequire\0", "config", "gitsigns.nvim")
 time([[Config for gitsigns.nvim]], false)
+-- Config for: packer.nvim
+time([[Config for packer.nvim]], true)
+try_loadstring("\27LJ\2\nŸ\1\0\0\4\0\6\0\t6\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\4\0005\3\3\0=\3\5\2B\0\2\1K\0\1\0\15registries\1\0\1\15registries\0\1\3\0\0&github:Crashdummyy/mason-registry$github:mason-org/mason-registry\nsetup\nmason\frequire\0", "config", "packer.nvim")
+time([[Config for packer.nvim]], false)
+-- Config for: nvim-web-devicons
+time([[Config for nvim-web-devicons]], true)
+try_loadstring("\27LJ\2\nC\0\0\3\0\3\0\a6\0\0\0'\2\1\0B\0\2\0029\0\2\0004\2\0\0B\0\2\1K\0\1\0\nsetup\22nvim-web-devicons\frequire\0", "config", "nvim-web-devicons")
+time([[Config for nvim-web-devicons]], false)
 vim.cmd [[augroup packer_load_aucmds]]
 vim.cmd [[au!]]
   -- Filetype lazy-loads
 time([[Defining lazy-load filetype autocommands]], true)
+vim.cmd [[au FileType cs ++once lua require("packer.load")({'roslyn.nvim'}, { ft = "cs" }, _G.packer_plugins)]]
 vim.cmd [[au FileType markdown ++once lua require("packer.load")({'markdown-preview.nvim'}, { ft = "markdown" }, _G.packer_plugins)]]
 time([[Defining lazy-load filetype autocommands]], false)
 vim.cmd("augroup END")

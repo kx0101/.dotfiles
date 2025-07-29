@@ -1,5 +1,12 @@
--- vim.opt.guicursor = ""
-vim.opt.guicursor = "n-v-c:block-Cursor/lCursor,i-ci:ver25-Cursor"
+vim.opt.termguicolors = true
+
+vim.opt.guicursor = "n-v-c:block-Cursor,i:block-CursorInsert"
+vim.api.nvim_create_autocmd("ColorScheme", {
+    callback = function()
+        vim.api.nvim_set_hl(0, "Cursor", { fg = "black", bg = "white" })
+        vim.api.nvim_set_hl(0, "CursorInsert", { fg = "black", bg = "white" })
+    end,
+})
 
 vim.opt.nu = true
 vim.opt.relativenumber = true
@@ -20,8 +27,6 @@ vim.opt.undofile = true
 
 vim.opt.hlsearch = false
 vim.opt.incsearch = true
-
-vim.opt.termguicolors = true
 
 vim.opt.scrolloff = 8
 vim.opt.signcolumn = "yes"

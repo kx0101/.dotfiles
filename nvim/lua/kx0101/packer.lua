@@ -1,5 +1,15 @@
 return require('packer').startup(function(use)
-    use 'wbthomason/packer.nvim'
+    use {
+        'wbthomason/packer.nvim',
+        config = function()
+            require('mason').setup({
+                registries = {
+                    'github:Crashdummyy/mason-registry',
+                    'github:mason-org/mason-registry',
+                },
+            })
+        end
+    }
 
     use {
         'nvim-telescope/telescope.nvim', tag = '0.1.4',
@@ -35,49 +45,49 @@ return require('packer').startup(function(use)
     --     end
     -- }
 
-    use {
-        "folke/tokyonight.nvim",
-        lazy = false,
-        priority = 1000,
-        opts = {
-            style = "moon",
-            styles = {
-                comments = { italic = false },
-                keywords = { italic = false },
-                functions = {},
-                variables = {},
-            },
-        },
-        config = function(_, opts)
-            require("tokyonight").setup(opts)
-            vim.cmd("colorscheme tokyonight")
-
-            local function disable_italics(groups)
-                for _, group in ipairs(groups) do
-                    local ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = group, link = false })
-                    if ok then
-                        hl.italic = false
-                        vim.api.nvim_set_hl(0, group, hl)
-                    end
-                end
-            end
-
-            vim.api.nvim_create_autocmd("ColorScheme", {
-                pattern = "tokyonight",
-                callback = function()
-                    disable_italics({
-                        "@keyword",
-                        "@keyword.function",
-                        "@keyword.return",
-                        "@conditional",
-                        "@repeat",
-                    })
-                end,
-            })
-
-            vim.cmd("doautocmd ColorScheme")
-        end,
-    }
+    -- use {
+    --     "folke/tokyonight.nvim",
+    --     lazy = false,
+    --     priority = 1000,
+    --     opts = {
+    --         style = "moon",
+    --         styles = {
+    --             comments = { italic = false },
+    --             keywords = { italic = false },
+    --             functions = {},
+    --             variables = {},
+    --         },
+    --     },
+    --     config = function(_, opts)
+    --         require("tokyonight").setup(opts)
+    --         vim.cmd("colorscheme tokyonight")
+    --
+    --         local function disable_italics(groups)
+    --             for _, group in ipairs(groups) do
+    --                 local ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = group, link = false })
+    --                 if ok then
+    --                     hl.italic = false
+    --                     vim.api.nvim_set_hl(0, group, hl)
+    --                 end
+    --             end
+    --         end
+    --
+    --         vim.api.nvim_create_autocmd("ColorScheme", {
+    --             pattern = "tokyonight",
+    --             callback = function()
+    --                 disable_italics({
+    --                     "@keyword",
+    --                     "@keyword.function",
+    --                     "@keyword.return",
+    --                     "@conditional",
+    --                     "@repeat",
+    --                 })
+    --             end,
+    --         })
+    --
+    --         vim.cmd("doautocmd ColorScheme")
+    --     end,
+    -- }
 
     --
     -- use({
@@ -104,10 +114,10 @@ return require('packer').startup(function(use)
     --     end
     -- })
 
-    -- use({
-    --     'rose-pine/neovim',
-    --     as = 'rose-pine',
-    -- })
+    use({
+        'rose-pine/neovim',
+        as = 'rose-pine',
+    })
 
     -- use({
     --     'AlexvZyl/nordic.nvim',
@@ -123,6 +133,37 @@ return require('packer').startup(function(use)
     -- })
 
     use { "folke/neodev.nvim", opts = {} }
+
+    use {
+        "seblyng/roslyn.nvim",
+        ft = "cs",
+        config = function()
+            require("roslyn").setup({
+                on_attach = function(client, bufnr)
+                    require("lsp-zero").default_on_attach(client, bufnr)
+                end,
+                capabilities = require("lsp-zero").get_capabilities(),
+                filewatching = "roslyn",
+                cmd = {
+                    "dotnet",
+                    vim.fn.stdpath("data") .. "/mason/packages/roslyn/libexec/Microsoft.CodeAnalysis.LanguageServer.dll",
+                    "--logLevel=Information",
+                    "--stdio"
+                },
+                filetypes = { "cs", "vb" },
+                root_dir = require("lspconfig.util").root_pattern("*.sln", "*.csproj"),
+                settings = {
+                    ["csharp|inlay_hints"] = {
+                        csharp_enable_inlay_hints_for_implicit_object_creation = true,
+                        csharp_enable_inlay_hints_for_implicit_variable_types = true,
+                    },
+                    ["csharp|code_lens"] = {
+                        dotnet_enable_references_code_lens = true,
+                    },
+                },
+            })
+        end
+    }
 
     use { "rcarriga/nvim-dap-ui", requires = { "mfussenegger/nvim-dap", "nvim-neotest/nvim-nio" } }
 

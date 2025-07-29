@@ -4,7 +4,13 @@ require("neodev").setup({
 
 local lsp = require("lsp-zero")
 
-require('mason').setup({})
+require('mason').setup({
+    registries = {
+        "github:mason-org/mason-registry",
+        "github:Crashdummyy/mason-registry",
+    },
+})
+
 require('mason-lspconfig').setup({
     ensure_installed = {
         'eslint',
@@ -13,18 +19,8 @@ require('mason-lspconfig').setup({
         -- 'sqls',
         -- 'jdtls',
         -- 'rust_analyzer',
-        'omnisharp',
         'gopls',
         'clangd',
-    },
-    handlers = {
-        function(server_name)
-            local capabilities = require('blink.cmp').get_lsp_capabilities()
-
-            require('lspconfig')[server_name].setup({
-                capabilities = capabilities
-            })
-        end
     }
 })
 
@@ -95,22 +91,6 @@ lsp.configure('rust_analyzer', {
             }
         }
     }
-})
-
-lsp.use('omnisharp', {
-    cmd = { "dotnet", os.getenv("HOME") .. "/.omnisharp/OmniSharp.dll" },
-    root_dir = require("lspconfig").util.root_pattern("*.sln", "*.csproj"),
-    enable_roslyn_analysers = true,
-    enable_import_completion = true,
-    analyzeOpenDocumentsOnly = false,
-    organize_imports_on_format = true,
-    filetypes = { 'cs', 'vb', 'csproj', 'sln', 'slnx', 'props' },
-    handlers = {
-        ["textDocument/definition"] = require('omnisharp_extended').definition_handler,
-        ["textDocument/typeDefinition"] = require('omnisharp_extended').type_definition_handler,
-        ["textDocument/references"] = require('omnisharp_extended').references_handler,
-        ["textDocument/implementation"] = require('omnisharp_extended').implementation_handler,
-    },
 })
 
 local cmp = require('cmp')
