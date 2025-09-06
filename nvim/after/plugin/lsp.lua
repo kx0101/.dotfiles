@@ -17,7 +17,6 @@ require('mason-lspconfig').setup({
         -- 'tsserver',
         'lua_ls',
         -- 'sqls',
-        -- 'jdtls',
         -- 'rust_analyzer',
         'gopls',
         'clangd',
@@ -125,6 +124,25 @@ cmp.setup({
         end,
     },
 })
+
+vim.api.nvim_create_autocmd('FileType', {
+    pattern = 'java',
+    callback = function()
+        require('jdtls.jdtls_setup').setup()
+    end,
+})
+
+-- jesus christ u have to clean this cache quite often lmao
+vim.api.nvim_create_user_command(
+    'CleanJdtls',
+    function()
+        vim.fn.delete(vim.fn.expand('~/.cache/nvim/jdtls'), 'rf')
+        vim.fn.delete(vim.fn.expand('~/.cache/jdtls'), 'rf')
+        vim.fn.delete(vim.fn.expand('~/.local/share/jdtls'), 'rf')
+        print('Deleted cache!')
+    end,
+    {}
+)
 
 -- vim.api.nvim_command([[
 --   autocmd BufWritePre *.java lua vim.loop.spawn("mvn", { args = { "compile" }})
