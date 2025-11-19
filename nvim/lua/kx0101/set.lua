@@ -1,5 +1,6 @@
 vim.opt.termguicolors = true
 
+-- vim.opt.guicursor = "n-v-c:block-Cursor,i:ver25-CursorInsert"
 vim.opt.guicursor = "n-v-c:block-Cursor,i:block-CursorInsert"
 vim.api.nvim_create_autocmd("ColorScheme", {
     callback = function()
