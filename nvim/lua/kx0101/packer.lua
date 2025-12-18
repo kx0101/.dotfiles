@@ -11,14 +11,17 @@ return require('packer').startup(function(use)
         end
     }
 
-    use "/home/elijahkx/personal/csharp/devbox"
-
     use {
         'nvim-telescope/telescope.nvim', tag = '0.1.4',
         requires = { 'nvim-lua/plenary.nvim', }
     }
 
     use { 'nvim-telescope/telescope-file-browser.nvim' }
+
+    use {
+        "nvim-lualine/lualine.nvim",
+        requires = { "nvim-tree/nvim-web-devicons" },
+    }
 
     use {
         "yanganto/move.vim",
@@ -115,6 +118,37 @@ return require('packer').startup(function(use)
     --         vim.cmd('colorscheme gruvbox-material')
     --     end
     -- })
+
+    use {
+        "blazkowolf/gruber-darker.nvim",
+        opts = {
+            bold = true,
+            invert = {
+                signs = false,
+                tabline = false,
+                visual = false,
+            },
+            italic = {
+                strings = false,
+                comments = false,
+                operators = false,
+                folds = false,
+            },
+            undercurl = true,
+            underline = true,
+        },
+        config = function()
+            require("gruber-darker").setup()
+            vim.cmd.colorscheme("gruber-darker")
+
+            local groups = { "String", "Character", "Constant" }
+            for _, group in ipairs(groups) do
+                local hl = vim.api.nvim_get_hl(0, { name = group })
+                hl.italic = false
+                vim.api.nvim_set_hl(0, group, hl)
+            end
+        end,
+    }
 
     use({
         'rose-pine/neovim',
@@ -242,9 +276,7 @@ return require('packer').startup(function(use)
                 'williamboman/mason-lspconfig.nvim',
                 opts = {
                     automatic_enable = {
-                        exclude = {
-                            'jdtls',
-                        }
+                        exclude = { "volar", "vscoqtop", "jdtls" },
                     }
                 }
             },
@@ -268,8 +300,6 @@ return require('packer').startup(function(use)
     use { 'nvim-tree/nvim-web-devicons',
         config = function() require("nvim-web-devicons").setup {} end
     }
-
-    use { 'nvim-lualine/lualine.nvim' }
 
     use {
         'terrortylor/nvim-comment',

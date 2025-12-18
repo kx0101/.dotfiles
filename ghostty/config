@@ -1,0 +1,51 @@
+# Rose Pine Theme for Ghostty
+# background = "#191724"
+# background = "#000000"
+# foreground = "#e0def4"
+#
+# selection-background = "#2a283e"
+# selection-foreground = "#e0def4"
+
+cursor-color = "#524f67"
+# font-family = "Fira Code"
+# font-family = "Cascadia Code"
+# font-family = "Source Code Pro"
+# font-family = "Iosevka Term Slab"
+font-family = "Iosevka Term Slab"
+theme = "tsoding"
+
+keybind = ctrl+shift+f=toggle_fullscreen
+
+# # Black
+# palette = 0=#26233a
+# # Red
+# palette = 1=#eb6f92
+# # Green
+# palette = 2=#31748f
+# # Yellow
+# palette = 3=#f6c177
+# # Blue
+# palette = 4=#9ccfd8
+# # Magenta
+# palette = 5=#c4a7e7
+# # Cyan
+# palette = 6=#ebbcba
+# # White
+# palette = 7=#e0def4
+#
+# # Bright Black
+# palette = 8=#6e6a86
+# # Bright Red
+# palette = 9=#eb6f92
+# # Bright Green
+# palette = 10=#31748f
+# # Bright Yellow
+# palette = 11=#f6c177
+# # Bright Blue
+# palette = 12=#9ccfd8
+# # Bright Magenta
+# palette = 13=#c4a7e7
+# # Bright Cyan
+# palette = 14=#ebbcba
+# # Bright White
+# palette = 15=#e0def4

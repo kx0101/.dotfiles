@@ -14,7 +14,7 @@ require('mason').setup({
 -- mason-lspconfig setup
 require('mason-lspconfig').setup({
     ensure_installed = {
-        'eslint',
+        -- 'eslint',
         'lua_ls',
         'gopls',
         'clangd',
@@ -22,7 +22,6 @@ require('mason-lspconfig').setup({
 })
 
 -- Lua
-
 vim.lsp.config('lua_ls', {
     settings = {
         Lua = {
