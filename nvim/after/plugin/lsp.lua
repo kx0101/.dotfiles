@@ -82,6 +82,16 @@ vim.lsp.config("rust_analyzer", {
                 command = "clippy",
                 extraArgs = { "--all", "--", "-W", "clippy::all" },
             },
+            files = {
+                watcherExclude = {
+                    "**/target/**",
+                    "**/.git/**",
+                },
+                excludeDirs = {
+                    "**/target/**",
+                    "**/.git/**",
+                }
+            }
         },
     },
 })
@@ -143,9 +153,38 @@ vim.api.nvim_create_autocmd("LspAttach", {
 })
 
 -- diagnostics config
+local signs = {
+    Error = " ",
+    Warn  = " ",
+    Hint  = "󰠠 ",
+    Info  = " "
+}
+
 vim.diagnostic.config({
-    virtual_text = true,
-    signs = true,
+    virtual_text = {
+        source = "if_many",
+        prefix = function(diagnostic)
+            if diagnostic.severity == vim.diagnostic.severity.ERROR then
+                return signs.Error
+            elseif diagnostic.severity == vim.diagnostic.severity.WARN then
+                return signs.Warn
+            elseif diagnostic.severity == vim.diagnostic.severity.HINT then
+                return signs.Hint
+            else
+                return signs.Info
+            end
+        end,
+    },
+
+    signs = {
+        text = {
+            [vim.diagnostic.severity.ERROR] = signs.Error,
+            [vim.diagnostic.severity.WARN]  = signs.Warn,
+            [vim.diagnostic.severity.HINT]  = signs.Hint,
+            [vim.diagnostic.severity.INFO]  = signs.Info,
+        },
+    },
+
     update_in_insert = false,
     severity_sort = true,
 })

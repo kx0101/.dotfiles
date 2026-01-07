@@ -1,7 +1,7 @@
 --- idk what the f but this solves it for now...
 local old_notify = vim.notify
 vim.notify = function(msg, log_level, opts)
-    if msg:match("volar is deprecated") or msg:match("vscoqtop is deprecated") then
+    if msg:match("volar is deprecated") or msg:match("vscoqtop is deprecated") or msg:match("systemd_ls") then
         return
     end
 

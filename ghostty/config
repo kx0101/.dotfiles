@@ -10,10 +10,11 @@ cursor-color = "#524f67"
 # font-family = "Fira Code"
 # font-family = "Cascadia Code"
 # font-family = "Source Code Pro"
-# font-family = "Iosevka Term Slab"
+# font-family = "Agave Nerd Font"
 font-family = "Iosevka Term Slab"
+# font-family = "IosevkaTerm Nerd Font"
+font-style = "Medium"
 theme = "tsoding"
-
 keybind = ctrl+shift+f=toggle_fullscreen
 
 # # Black

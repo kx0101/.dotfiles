@@ -1,11 +1,52 @@
 #!/usr/bin/env bash
+set -e
 
-sudo mkdir -p ~/.local/share/fonts
-cd ~/.local/share/fonts
-sudo wget -O "Hack.zip" "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/Hack.zip"
-sudo unzip Hack.zip && sudo rm Hack.zip
+FONT_DIR="$HOME/.local/share/fonts"
+mkdir -p "$FONT_DIR"
+cd "$FONT_DIR"
+
+echo "Installing Nerd Fonts..."
+
+download_and_install() {
+  local name="$1"
+  local url="$2"
+
+  echo "--> $name"
+  wget -q -O "$name.zip" "$url"
+  unzip -q "$name.zip"
+  rm "$name.zip"
+}
+
+download_and_install "Hack" \
+  "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/Hack.zip"
+
+download_and_install "FiraCode" \
+  "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/FiraCode.zip"
+
+download_and_install "CascadiaCode" \
+  "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/CascadiaCode.zip"
+
+download_and_install "SourceCodePro" \
+  "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/SourceCodePro.zip"
+
+download_and_install "Agave" \
+  "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/Agave.zip"
+
+download_and_install "IosevkaTerm" \
+  "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/IosevkaTerm.zip"
+
+IOSEVKA_VERSION="v30.1.2"
+wget -q -O iosevka.zip \
+  "https://github.com/be5invis/Iosevka/releases/download/${IOSEVKA_VERSION}/PkgTTF-IosevkaTermSlab-${IOSEVKA_VERSION}.zip"
+
+unzip -q iosevka.zip
+rm iosevka.zip
+
+echo "Refreshing font cache..."
 fc-cache -fv
 
-# Adwaita
+echo "Installing Adwaita extra themes..."
 sudo apt update
-sudo apt install gnome-themes-extra
+sudo apt install -y gnome-themes-extra
+
+echo "All fonts installed successfully"

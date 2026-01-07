@@ -74,15 +74,16 @@ end
 time([[try_loadstring definition]], false)
 time([[Defining packer_plugins]], true)
 _G.packer_plugins = {
+  ["99"] = {
+    config = { "\27LJ\2\n*\0\0\2\1\1\0\4-\0\0\0009\0\0\0B\0\1\1K\0\1\0\0¿\21fill_in_function \0\0\2\1\1\0\4-\0\0\0009\0\0\0B\0\1\1K\0\1\0\0¿\vvisual+\0\0\2\1\1\0\4-\0\0\0009\0\0\0B\0\1\1K\0\1\0\0¿\22stop_all_requests≥\3\1\0\n\0\28\00016\0\0\0'\2\1\0B\0\2\0026\1\2\0009\1\3\0019\1\4\1B\1\1\0026\2\2\0009\2\5\0029\2\6\2\18\4\1\0B\2\2\0029\3\a\0005\5\b\0005\6\n\0009\a\t\0=\a\v\6'\a\f\0\18\b\2\0'\t\r\0&\a\t\a=\a\14\6=\6\15\0055\6\16\0=\6\17\5B\3\2\0016\3\2\0009\3\18\0039\3\19\3'\5\20\0'\6\21\0003\a\22\0B\3\4\0016\3\2\0009\3\18\0039\3\19\3'\5\23\0'\6\24\0003\a\25\0B\3\4\0016\3\2\0009\3\18\0039\3\19\3'\5\23\0'\6\26\0003\a\27\0B\3\4\0012\0\0ÄK\0\1\0\0\15<leader>9s\0\15<leader>9v\6v\0\15<leader>9f\6n\bset\vkeymap\rmd_files\1\2\0\0\rAGENT.md\vlogger\tpath\14.99.debug\n/tmp/\nlevel\1\0\3\tpath\0\19print_on_error\2\nlevel\0\nDEBUG\1\0\3\vlogger\0\rmd_files\0\nmodel\24opencode/gpt-5-nano\nsetup\rbasename\afs\bcwd\auv\bvim\a99\frequire\0" },
+    loaded = true,
+    path = "/home/elijahkx/.local/share/nvim/site/pack/packer/start/99",
+    url = "https://github.com/ThePrimeagen/99"
+  },
   LuaSnip = {
     loaded = true,
     path = "/home/elijahkx/.local/share/nvim/site/pack/packer/start/LuaSnip",
     url = "https://github.com/L3MON4D3/LuaSnip"
-  },
-  ["blink.cmp"] = {
-    loaded = true,
-    path = "/home/elijahkx/.local/share/nvim/site/pack/packer/start/blink.cmp",
-    url = "https://github.com/saghen/blink.cmp"
   },
   ["cmp-buffer"] = {
     loaded = true,
@@ -109,11 +110,6 @@ _G.packer_plugins = {
     path = "/home/elijahkx/.local/share/nvim/site/pack/packer/start/cmp_luasnip",
     url = "https://github.com/saadparwaiz1/cmp_luasnip"
   },
-  devbox = {
-    loaded = true,
-    path = "/home/elijahkx/.local/share/nvim/site/pack/packer/start/devbox",
-    url = "/home/elijahkx/personal/csharp/devbox"
-  },
   ["diffview.nvim"] = {
     loaded = true,
     path = "/home/elijahkx/.local/share/nvim/site/pack/packer/start/diffview.nvim",
@@ -129,6 +125,12 @@ _G.packer_plugins = {
     loaded = true,
     path = "/home/elijahkx/.local/share/nvim/site/pack/packer/start/gitsigns.nvim",
     url = "https://github.com/lewis6991/gitsigns.nvim"
+  },
+  ["gruber-darker.nvim"] = {
+    config = { "\27LJ\2\nï\2\0\0\f\0\14\0\"6\0\0\0'\2\1\0B\0\2\0029\0\2\0B\0\1\0016\0\3\0009\0\4\0009\0\5\0'\2\1\0B\0\2\0015\0\6\0006\1\a\0\18\3\0\0B\1\2\4X\4\16Ä6\6\3\0009\6\b\0069\6\t\6)\b\0\0005\t\n\0=\5\v\tB\6\3\2+\a\1\0=\a\f\0066\a\3\0009\a\b\a9\a\r\a)\t\0\0\18\n\5\0\18\v\6\0B\a\4\1E\4\3\3R\4Ó\127K\0\1\0\16nvim_set_hl\vitalic\tname\1\0\1\tname\0\16nvim_get_hl\bapi\vipairs\1\4\0\0\vString\14Character\rConstant\16colorscheme\bcmd\bvim\nsetup\18gruber-darker\frequire\0" },
+    loaded = true,
+    path = "/home/elijahkx/.local/share/nvim/site/pack/packer/start/gruber-darker.nvim",
+    url = "https://github.com/blazkowolf/gruber-darker.nvim"
   },
   harpoon = {
     loaded = true,
@@ -246,7 +248,7 @@ _G.packer_plugins = {
     url = "https://github.com/rose-pine/neovim"
   },
   ["roslyn.nvim"] = {
-    config = { "\27LJ\2\nü\2\0\2\a\0\15\0\0246\2\0\0'\4\1\0B\2\2\0029\2\2\2\18\4\0\0\18\5\1\0B\2\3\0019\2\3\0009\2\4\2\15\0\2\0X\3\fÄ6\2\5\0009\2\6\0029\2\a\0025\4\b\0005\5\t\0=\1\n\0056\6\5\0009\6\v\0069\6\f\0069\6\r\6=\6\14\5B\2\3\1K\0\1\0\rcallback\frefresh\rcodelens\blsp\vbuffer\1\0\2\vbuffer\0\rcallback\0\1\3\0\0\rBufEnter\17BufWritePost\24nvim_create_autocmd\bapi\bvim\21codeLensProvider\24server_capabilities\22default_on_attach\rlsp-zero\frequireØ\15\1\0\t\0)\00056\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\4\0003\3\3\0=\3\5\0026\3\0\0'\5\6\0B\3\2\0029\3\a\3B\3\1\2=\3\b\0025\3\t\0006\4\n\0009\4\v\0049\4\f\4'\6\r\0B\4\2\2'\5\14\0&\4\5\4>\4\2\3=\3\15\0025\3\16\0=\3\17\0026\3\0\0'\5\18\0B\3\2\0029\3\19\3'\5\20\0'\6\21\0'\a\22\0'\b\23\0B\3\5\2=\3\24\0025\3\26\0005\4\25\0=\4\27\0035\4\28\0=\4\29\0035\4\30\0=\4\31\0035\4!\0005\5 \0=\5\"\4=\4#\0035\4$\0=\4%\0035\4&\0=\4'\3=\3(\2B\0\2\1K\0\1\0\rsettings\22csharp|formatting\1\0\1&dotnet_organize_imports_on_format\2\25csharp|symbol_search\1\0\1'dotnet_search_reference_assemblies\2\31csharp|background_analysis\24background_analysis\1\0\1\24background_analysis\0\1\0\2&dotnet_analyzer_diagnostics_scope\17fullSolution&dotnet_compiler_diagnostics_scope\17fullSolution\22csharp|completion\1\0\3%dotnet_provide_regex_completions\2,dotnet_show_name_completion_suggestions\2<dotnet_show_completion_items_from_unimported_namespaces\2\21csharp|code_lens\1\0\2'dotnet_enable_references_code_lens\2\"dotnet_enable_tests_code_lens\2\23csharp|inlay_hints\1\0\6\23csharp|inlay_hints\0\22csharp|formatting\0\21csharp|code_lens\0\31csharp|background_analysis\0\25csharp|symbol_search\0\22csharp|completion\0\1\0\f3dotnet_enable_inlay_hints_for_other_parameters\2=dotnet_enable_inlay_hints_for_object_creation_parameters\0025dotnet_enable_inlay_hints_for_literal_parameters\0025dotnet_enable_inlay_hints_for_indexer_parameters\2(csharp_enable_inlay_hints_for_types\0029csharp_enable_inlay_hints_for_lambda_parameter_types\2:csharp_enable_inlay_hints_for_implicit_variable_types\2;csharp_enable_inlay_hints_for_implicit_object_creation\2Hdotnet_suppress_inlay_hints_for_parameters_that_match_method_intent\2Hdotnet_suppress_inlay_hints_for_parameters_that_match_argument_name\2Jdotnet_suppress_inlay_hints_for_parameters_that_differ_only_by_suffix\2-dotnet_enable_inlay_hints_for_parameters\2\rroot_dir\t.git\r*.fsproj\r*.csproj\n*.sln\17root_pattern\19lspconfig.util\14filetypes\1\3\0\0\acs\avb\bcmdM/mason/packages/roslyn/libexec/Microsoft.CodeAnalysis.LanguageServer.dll\tdata\fstdpath\afn\bvim\1\5\0\0\vdotnet\0\27--logLevel=Information\f--stdio\17capabilities\21get_capabilities\rlsp-zero\14on_attach\1\0\t\14on_attach\0\bcmd\0\17capabilities\0\16lock_target\2\17broad_search\1\17filewatching\boff\rsettings\0\14filetypes\0\rroot_dir\0\0\nsetup\vroslyn\frequire\0" },
+    config = { "\27LJ\2\nü\2\0\2\a\0\15\0\0246\2\0\0'\4\1\0B\2\2\0029\2\2\2\18\4\0\0\18\5\1\0B\2\3\0019\2\3\0009\2\4\2\15\0\2\0X\3\fÄ6\2\5\0009\2\6\0029\2\a\0025\4\b\0005\5\t\0=\1\n\0056\6\5\0009\6\v\0069\6\f\0069\6\r\6=\6\14\5B\2\3\1K\0\1\0\rcallback\frefresh\rcodelens\blsp\vbuffer\1\0\2\vbuffer\0\rcallback\0\1\3\0\0\rBufEnter\17BufWritePost\24nvim_create_autocmd\bapi\bvim\21codeLensProvider\24server_capabilities\22default_on_attach\rlsp-zero\frequireØ\15\1\0\t\0)\00056\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\4\0003\3\3\0=\3\5\0026\3\0\0'\5\6\0B\3\2\0029\3\a\3B\3\1\2=\3\b\0025\3\t\0006\4\n\0009\4\v\0049\4\f\4'\6\r\0B\4\2\2'\5\14\0&\4\5\4>\4\2\3=\3\15\0025\3\16\0=\3\17\0026\3\0\0'\5\18\0B\3\2\0029\3\19\3'\5\20\0'\6\21\0'\a\22\0'\b\23\0B\3\5\2=\3\24\0025\3\26\0005\4\25\0=\4\27\0035\4\28\0=\4\29\0035\4\30\0=\4\31\0035\4!\0005\5 \0=\5\"\4=\4#\0035\4$\0=\4%\0035\4&\0=\4'\3=\3(\2B\0\2\1K\0\1\0\rsettings\22csharp|formatting\1\0\1&dotnet_organize_imports_on_format\2\25csharp|symbol_search\1\0\1'dotnet_search_reference_assemblies\2\31csharp|background_analysis\24background_analysis\1\0\1\24background_analysis\0\1\0\2&dotnet_compiler_diagnostics_scope\17fullSolution&dotnet_analyzer_diagnostics_scope\17fullSolution\22csharp|completion\1\0\3%dotnet_provide_regex_completions\2,dotnet_show_name_completion_suggestions\2<dotnet_show_completion_items_from_unimported_namespaces\2\21csharp|code_lens\1\0\2\"dotnet_enable_tests_code_lens\2'dotnet_enable_references_code_lens\2\23csharp|inlay_hints\1\0\6\21csharp|code_lens\0\31csharp|background_analysis\0\22csharp|formatting\0\25csharp|symbol_search\0\23csharp|inlay_hints\0\22csharp|completion\0\1\0\fHdotnet_suppress_inlay_hints_for_parameters_that_match_argument_name\2Jdotnet_suppress_inlay_hints_for_parameters_that_differ_only_by_suffix\2-dotnet_enable_inlay_hints_for_parameters\0023dotnet_enable_inlay_hints_for_other_parameters\2=dotnet_enable_inlay_hints_for_object_creation_parameters\0025dotnet_enable_inlay_hints_for_literal_parameters\0025dotnet_enable_inlay_hints_for_indexer_parameters\2(csharp_enable_inlay_hints_for_types\0029csharp_enable_inlay_hints_for_lambda_parameter_types\2:csharp_enable_inlay_hints_for_implicit_variable_types\2;csharp_enable_inlay_hints_for_implicit_object_creation\2Hdotnet_suppress_inlay_hints_for_parameters_that_match_method_intent\2\rroot_dir\t.git\r*.fsproj\r*.csproj\n*.sln\17root_pattern\19lspconfig.util\14filetypes\1\3\0\0\acs\avb\bcmdM/mason/packages/roslyn/libexec/Microsoft.CodeAnalysis.LanguageServer.dll\tdata\fstdpath\afn\bvim\1\5\0\0\vdotnet\0\27--logLevel=Information\f--stdio\17capabilities\21get_capabilities\rlsp-zero\14on_attach\1\0\t\16lock_target\2\14filetypes\0\14on_attach\0\17filewatching\boff\17capabilities\0\rroot_dir\0\rsettings\0\bcmd\0\17broad_search\1\0\nsetup\vroslyn\frequire\0" },
     loaded = false,
     needs_bufread = false,
     only_cond = false,
@@ -290,6 +292,22 @@ time([[Defining packer_plugins]], false)
 time([[Setup for markdown-preview.nvim]], true)
 try_loadstring("\27LJ\2\n=\0\0\2\0\4\0\0056\0\0\0009\0\1\0005\1\3\0=\1\2\0K\0\1\0\1\2\0\0\rmarkdown\19mkdp_filetypes\6g\bvim\0", "setup", "markdown-preview.nvim")
 time([[Setup for markdown-preview.nvim]], false)
+-- Config for: nvim-comment
+time([[Config for nvim-comment]], true)
+try_loadstring("\27LJ\2\n:\0\0\3\0\3\0\0066\0\0\0'\2\1\0B\0\2\0029\0\2\0B\0\1\1K\0\1\0\nsetup\17nvim_comment\frequire\0", "config", "nvim-comment")
+time([[Config for nvim-comment]], false)
+-- Config for: 99
+time([[Config for 99]], true)
+try_loadstring("\27LJ\2\n*\0\0\2\1\1\0\4-\0\0\0009\0\0\0B\0\1\1K\0\1\0\0¿\21fill_in_function \0\0\2\1\1\0\4-\0\0\0009\0\0\0B\0\1\1K\0\1\0\0¿\vvisual+\0\0\2\1\1\0\4-\0\0\0009\0\0\0B\0\1\1K\0\1\0\0¿\22stop_all_requests≥\3\1\0\n\0\28\00016\0\0\0'\2\1\0B\0\2\0026\1\2\0009\1\3\0019\1\4\1B\1\1\0026\2\2\0009\2\5\0029\2\6\2\18\4\1\0B\2\2\0029\3\a\0005\5\b\0005\6\n\0009\a\t\0=\a\v\6'\a\f\0\18\b\2\0'\t\r\0&\a\t\a=\a\14\6=\6\15\0055\6\16\0=\6\17\5B\3\2\0016\3\2\0009\3\18\0039\3\19\3'\5\20\0'\6\21\0003\a\22\0B\3\4\0016\3\2\0009\3\18\0039\3\19\3'\5\23\0'\6\24\0003\a\25\0B\3\4\0016\3\2\0009\3\18\0039\3\19\3'\5\23\0'\6\26\0003\a\27\0B\3\4\0012\0\0ÄK\0\1\0\0\15<leader>9s\0\15<leader>9v\6v\0\15<leader>9f\6n\bset\vkeymap\rmd_files\1\2\0\0\rAGENT.md\vlogger\tpath\14.99.debug\n/tmp/\nlevel\1\0\3\tpath\0\19print_on_error\2\nlevel\0\nDEBUG\1\0\3\vlogger\0\rmd_files\0\nmodel\24opencode/gpt-5-nano\nsetup\rbasename\afs\bcwd\auv\bvim\a99\frequire\0", "config", "99")
+time([[Config for 99]], false)
+-- Config for: gruber-darker.nvim
+time([[Config for gruber-darker.nvim]], true)
+try_loadstring("\27LJ\2\nï\2\0\0\f\0\14\0\"6\0\0\0'\2\1\0B\0\2\0029\0\2\0B\0\1\0016\0\3\0009\0\4\0009\0\5\0'\2\1\0B\0\2\0015\0\6\0006\1\a\0\18\3\0\0B\1\2\4X\4\16Ä6\6\3\0009\6\b\0069\6\t\6)\b\0\0005\t\n\0=\5\v\tB\6\3\2+\a\1\0=\a\f\0066\a\3\0009\a\b\a9\a\r\a)\t\0\0\18\n\5\0\18\v\6\0B\a\4\1E\4\3\3R\4Ó\127K\0\1\0\16nvim_set_hl\vitalic\tname\1\0\1\tname\0\16nvim_get_hl\bapi\vipairs\1\4\0\0\vString\14Character\rConstant\16colorscheme\bcmd\bvim\nsetup\18gruber-darker\frequire\0", "config", "gruber-darker.nvim")
+time([[Config for gruber-darker.nvim]], false)
+-- Config for: packer.nvim
+time([[Config for packer.nvim]], true)
+try_loadstring("\27LJ\2\nü\1\0\0\4\0\6\0\t6\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\4\0005\3\3\0=\3\5\2B\0\2\1K\0\1\0\15registries\1\0\1\15registries\0\1\3\0\0&github:Crashdummyy/mason-registry$github:mason-org/mason-registry\nsetup\nmason\frequire\0", "config", "packer.nvim")
+time([[Config for packer.nvim]], false)
 -- Config for: gitsigns.nvim
 time([[Config for gitsigns.nvim]], true)
 try_loadstring("\27LJ\2\nQ\0\0\3\0\4\0\a6\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\3\0B\0\2\1K\0\1\0\1\0\1\23current_line_blame\2\nsetup\rgitsigns\frequire\0", "config", "gitsigns.nvim")
@@ -298,14 +316,6 @@ time([[Config for gitsigns.nvim]], false)
 time([[Config for nvim-web-devicons]], true)
 try_loadstring("\27LJ\2\nC\0\0\3\0\3\0\a6\0\0\0'\2\1\0B\0\2\0029\0\2\0004\2\0\0B\0\2\1K\0\1\0\nsetup\22nvim-web-devicons\frequire\0", "config", "nvim-web-devicons")
 time([[Config for nvim-web-devicons]], false)
--- Config for: nvim-comment
-time([[Config for nvim-comment]], true)
-try_loadstring("\27LJ\2\n:\0\0\3\0\3\0\0066\0\0\0'\2\1\0B\0\2\0029\0\2\0B\0\1\1K\0\1\0\nsetup\17nvim_comment\frequire\0", "config", "nvim-comment")
-time([[Config for nvim-comment]], false)
--- Config for: packer.nvim
-time([[Config for packer.nvim]], true)
-try_loadstring("\27LJ\2\nü\1\0\0\4\0\6\0\t6\0\0\0'\2\1\0B\0\2\0029\0\2\0005\2\4\0005\3\3\0=\3\5\2B\0\2\1K\0\1\0\15registries\1\0\1\15registries\0\1\3\0\0&github:Crashdummyy/mason-registry$github:mason-org/mason-registry\nsetup\nmason\frequire\0", "config", "packer.nvim")
-time([[Config for packer.nvim]], false)
 vim.cmd [[augroup packer_load_aucmds]]
 vim.cmd [[au!]]
   -- Filetype lazy-loads
