@@ -44,7 +44,7 @@ return {
   term = "xterm-256color",
 
   colors = {
-    foreground = "#ADD8E6",
+    foreground = "#F5F5F5"
     background = "#181818",
     cursor_bg = "#FFDD33",
     cursor_border = "#FFDD33",
