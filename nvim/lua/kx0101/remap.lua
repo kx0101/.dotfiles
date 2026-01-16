@@ -54,6 +54,9 @@ vim.keymap.set("n", "<leader>dvh", ":DiffviewFileHistory<CR>")
 vim.keymap.set("n", "<leader>dvt", ":DiffviewToggleFiles<CR>")
 vim.keymap.set("n", "<leader>dvc", ":DiffviewFileHistory %<CR>")
 
+vim.keymap.set("n", "<leader>dmf", ":DeltaView develop")
+vim.keymap.set("n", "<leader>dmd", ":DeltaMenu develop")
+
 vim.opt.clipboard = "unnamedplus"
 vim.opt.shell = "/bin/bash"
 

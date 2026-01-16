@@ -1,0 +1,42 @@
+[user]
+	name = kx0101
+	email = liakos.koulaxis@yahoo.com
+[init]
+	defaultBranch = dev
+[core]
+	editor = nvim
+    pager = delta
+[status]
+    showStash = true
+    showUntrackedFiles = all
+[diff]
+    context = 3
+    renames = copies
+    interHunkContext = 10
+[interactive]
+    singlekey = true
+    diffFilter = delta --color-only
+[push]
+    default = current
+[pull]
+    default = current
+    rebase = true
+[log]
+    abbrevCommit = true
+    graphColors = blue,yellow,cyan,magenta,green,red
+[user]
+	signingkey = 610B0FF42F56FD27
+[commit]
+	gpgsign = true
+[includeIf "gitdir:~/work/"]
+  path = ~/.gitconfig-work
+
+[includeIf "gitdir:~/personal/"]
+  path = ~/.gitconfig-personal
+[credential]
+	helper = store
+[delta]
+    navigate = true
+    dark = true
+[merge]
+    conflictStyle = zdiff3
