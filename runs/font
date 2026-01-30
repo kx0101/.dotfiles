@@ -32,6 +32,9 @@ download_and_install "SourceCodePro" \
 download_and_install "Agave" \
   "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/Agave.zip"
 
+download_and_install "JetBrainsMono" \
+  "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip"
+
 download_and_install "IosevkaTerm" \
   "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/IosevkaTerm.zip"
 
