@@ -50,7 +50,6 @@ vim.keymap.set("n", "<C-k>", "<C-w>k")
 vim.keymap.set("n", "<C-l>", "<C-w>l")
 
 vim.opt.clipboard = "unnamedplus"
-vim.opt.shell = "/bin/bash"
 
 -- vim.g.clipboard = {
 --     name = "xclip-xfce4-clipman",

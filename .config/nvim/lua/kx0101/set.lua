@@ -1,3 +1,17 @@
+vim.opt.termguicolors = true
+
+if vim.fn.has("win32") == 1 then
+    vim.opt.shell = "cmd.exe"
+    vim.opt.shellcmdflag = "/s /c"
+    vim.opt.shellquote = ""
+    vim.opt.shellxquote = "("
+else
+    vim.opt.shell = "/usr/bin/zsh"
+    vim.opt.shellcmdflag = "-c"
+    vim.opt.shellquote = ""
+    vim.opt.shellxquote = ""
+end
+
 vim.opt.guicursor = ""
 
 vim.opt.nu = true

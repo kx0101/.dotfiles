@@ -57,6 +57,16 @@ return require('packer').startup(function(use)
 
     use { "folke/neodev.nvim", opts = {} }
 
+    use {
+        "nvim-neotest/neotest",
+        requires = {
+            "nvim-neotest/nvim-nio",
+            "nvim-lua/plenary.nvim",
+            "nvim-treesitter/nvim-treesitter",
+            "Issafalcon/neotest-dotnet",
+        },
+    }
+
     use { "rcarriga/nvim-dap-ui", requires = { "mfussenegger/nvim-dap", "nvim-neotest/nvim-nio" } }
 
     use({
