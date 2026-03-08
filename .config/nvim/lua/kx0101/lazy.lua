@@ -61,7 +61,7 @@ require("lazy").setup({
     -- =============================================
     {
         "williamboman/mason.nvim",
-        event = "VeryLazy",
+        lazy = false,
         config = function()
             require("mason").setup({
                 registries = {
@@ -74,7 +74,7 @@ require("lazy").setup({
 
     {
         "williamboman/mason-lspconfig.nvim",
-        event = "VeryLazy",
+        lazy = false,
         dependencies = { "williamboman/mason.nvim", "neovim/nvim-lspconfig" },
         opts = {
             ensure_installed = { "lua_ls", "gopls", "clangd" },
@@ -86,14 +86,10 @@ require("lazy").setup({
 
     {
         "neovim/nvim-lspconfig",
-        event = "VeryLazy",
+        lazy = false,
+        dependencies = { "saghen/blink.cmp" },
         config = function()
-            -- Use default capabilities; blink.cmp enhances them when it loads on InsertEnter
-            local capabilities = vim.lsp.protocol.make_client_capabilities()
-            local ok, blink = pcall(require, "blink.cmp")
-            if ok then
-                capabilities = blink.get_lsp_capabilities(capabilities)
-            end
+            local capabilities = require("blink.cmp").get_lsp_capabilities()
 
             vim.lsp.config("lua_ls", {
                 capabilities = capabilities,
@@ -185,40 +181,6 @@ require("lazy").setup({
                 end,
             })
 
-            -- Diagnostics
-            local signs = {
-                Error = " ",
-                Warn  = " ",
-                Hint  = "󰠠 ",
-                Info  = " ",
-            }
-
-            vim.diagnostic.config({
-                virtual_text = {
-                    source = "if_many",
-                    prefix = function(diagnostic)
-                        if diagnostic.severity == vim.diagnostic.severity.ERROR then
-                            return signs.Error
-                        elseif diagnostic.severity == vim.diagnostic.severity.WARN then
-                            return signs.Warn
-                        elseif diagnostic.severity == vim.diagnostic.severity.HINT then
-                            return signs.Hint
-                        else
-                            return signs.Info
-                        end
-                    end,
-                },
-                signs = {
-                    text = {
-                        [vim.diagnostic.severity.ERROR] = signs.Error,
-                        [vim.diagnostic.severity.WARN]  = signs.Warn,
-                        [vim.diagnostic.severity.HINT]  = signs.Hint,
-                        [vim.diagnostic.severity.INFO]  = signs.Info,
-                    },
-                },
-                update_in_insert = false,
-                severity_sort = true,
-            })
         end,
     },
 
@@ -237,7 +199,6 @@ require("lazy").setup({
     -- =============================================
     {
         "saghen/blink.cmp",
-        event = { "InsertEnter", "CmdlineEnter" },
         dependencies = { "rafamadriz/friendly-snippets" },
         version = "*",
         opts = {
@@ -333,6 +294,7 @@ require("lazy").setup({
     -- =============================================
     {
         "nvim-treesitter/nvim-treesitter",
+        lazy = false,
         build = ":TSUpdate",
         config = function()
             local ts = require("nvim-treesitter")
@@ -379,7 +341,6 @@ require("lazy").setup({
     -- =============================================
     {
         "nvim-telescope/telescope.nvim",
-        tag = "0.1.4",
         dependencies = { "nvim-lua/plenary.nvim" },
         keys = {
             { "<leader>pf", desc = "Find files" },
@@ -834,4 +795,39 @@ require("lazy").setup({
     -- lazy.nvim options
     checker = { enabled = false },
     change_detection = { notify = false },
+})
+
+-- Diagnostic signs (after all plugins loaded)
+local signs = {
+    Error = " ",
+    Warn  = " ",
+    Hint  = "󰠠 ",
+    Info  = " ",
+}
+
+vim.diagnostic.config({
+    virtual_text = {
+        source = "if_many",
+        prefix = function(diagnostic)
+            if diagnostic.severity == vim.diagnostic.severity.ERROR then
+                return signs.Error
+            elseif diagnostic.severity == vim.diagnostic.severity.WARN then
+                return signs.Warn
+            elseif diagnostic.severity == vim.diagnostic.severity.HINT then
+                return signs.Hint
+            else
+                return signs.Info
+            end
+        end,
+    },
+    signs = {
+        text = {
+            [vim.diagnostic.severity.ERROR] = signs.Error,
+            [vim.diagnostic.severity.WARN]  = signs.Warn,
+            [vim.diagnostic.severity.HINT]  = signs.Hint,
+            [vim.diagnostic.severity.INFO]  = signs.Info,
+        },
+    },
+    update_in_insert = false,
+    severity_sort = true,
 })
