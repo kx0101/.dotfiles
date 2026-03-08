@@ -346,6 +346,26 @@ require("lazy").setup({
                 end
             end
 
+            -- On Windows, symlink creation for queries can silently fail.
+            -- Create junctions for any parsers missing query links.
+            if vim.fn.has("win32") == 1 then
+                local site_queries = vim.fs.joinpath(vim.fn.stdpath("data"), "site", "queries")
+                local runtime_queries = vim.fs.joinpath(
+                    vim.fn.stdpath("data"),
+                    "lazy",
+                    "nvim-treesitter",
+                    "runtime",
+                    "queries"
+                )
+                for _, lang in ipairs(ensure_installed) do
+                    local link = vim.fs.joinpath(site_queries, lang)
+                    local target = vim.fs.joinpath(runtime_queries, lang)
+                    if not vim.uv.fs_stat(link) and vim.uv.fs_stat(target) then
+                        vim.fn.system({ "cmd", "/c", "mklink", "/J", link, target })
+                    end
+                end
+            end
+
             vim.api.nvim_create_autocmd("FileType", {
                 callback = function()
                     pcall(vim.treesitter.start)
