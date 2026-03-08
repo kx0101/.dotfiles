@@ -61,7 +61,7 @@ require("lazy").setup({
     -- =============================================
     {
         "williamboman/mason.nvim",
-        lazy = false,
+        event = "VeryLazy",
         config = function()
             require("mason").setup({
                 registries = {
@@ -74,6 +74,7 @@ require("lazy").setup({
 
     {
         "williamboman/mason-lspconfig.nvim",
+        event = "VeryLazy",
         dependencies = { "williamboman/mason.nvim", "neovim/nvim-lspconfig" },
         opts = {
             ensure_installed = { "lua_ls", "gopls", "clangd" },
@@ -85,9 +86,14 @@ require("lazy").setup({
 
     {
         "neovim/nvim-lspconfig",
-        dependencies = { "saghen/blink.cmp" },
+        event = "VeryLazy",
         config = function()
-            local capabilities = require("blink.cmp").get_lsp_capabilities()
+            -- Use default capabilities; blink.cmp enhances them when it loads on InsertEnter
+            local capabilities = vim.lsp.protocol.make_client_capabilities()
+            local ok, blink = pcall(require, "blink.cmp")
+            if ok then
+                capabilities = blink.get_lsp_capabilities(capabilities)
+            end
 
             vim.lsp.config("lua_ls", {
                 capabilities = capabilities,
@@ -231,6 +237,7 @@ require("lazy").setup({
     -- =============================================
     {
         "saghen/blink.cmp",
+        event = { "InsertEnter", "CmdlineEnter" },
         dependencies = { "rafamadriz/friendly-snippets" },
         version = "*",
         opts = {
