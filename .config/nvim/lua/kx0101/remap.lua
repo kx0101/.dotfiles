@@ -30,7 +30,7 @@ vim.keymap.set("n", "<leader>x", "<cmd>!chmod +x %<CR>", { silent = true })
 
 vim.keymap.set("n", "<leader>fmt", function() vim.lsp.buf.format({ async = true }) end, { noremap = true, silent = true })
 
-vim.keymap.set("n", "<leader>nc", function()
+vim.keymap.set("n", "<leader>nn", function()
     vim.api.nvim_put({ "if err != nil {", "\treturn err", "}" }, "l", true, true)
 end)
 
@@ -48,6 +48,14 @@ vim.keymap.set("n", "<C-h>", "<C-w>h")
 vim.keymap.set("n", "<C-j>", "<C-w>j")
 vim.keymap.set("n", "<C-k>", "<C-w>k")
 vim.keymap.set("n", "<C-l>", "<C-w>l")
+
+vim.keymap.set("n", "<leader>dvm", ":DiffviewOpen origin/develop..HEAD<CR>")
+vim.keymap.set("n", "<leader>dvh", ":DiffviewFileHistory<CR>")
+vim.keymap.set("n", "<leader>dvt", ":DiffviewToggleFiles<CR>")
+vim.keymap.set("n", "<leader>dvc", ":DiffviewFileHistory %<CR>")
+
+vim.keymap.set("n", "<leader>dmf", ":DeltaView develop")
+vim.keymap.set("n", "<leader>dmd", ":DeltaMenu develop")
 
 vim.opt.clipboard = "unnamedplus"
 
