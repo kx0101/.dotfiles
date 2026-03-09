@@ -9,6 +9,11 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 
+-- Workaround for blink.cmp v1.9.1 assuming vim.lsp.config['*'] exists on Neovim 0.11
+if vim.fn.has('nvim-0.11') == 1 and vim.lsp.config and not vim.lsp.config['*'] then
+    vim.lsp.config('*', {})
+end
+
 require("lazy").setup({
 
     -- =============================================
@@ -200,7 +205,7 @@ require("lazy").setup({
     {
         "saghen/blink.cmp",
         dependencies = { "rafamadriz/friendly-snippets" },
-        version = "*",
+        version = "1.*",
         opts = {
             keymap = { preset = "default" },
             appearance = { nerd_font_variant = "mono" },
