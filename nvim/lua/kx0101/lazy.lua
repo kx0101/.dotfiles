@@ -9,12 +9,18 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 
--- Workaround for blink.cmp v1.9.1 assuming vim.lsp.config['*'] exists on Neovim 0.11
-if vim.fn.has('nvim-0.11') == 1 and vim.lsp.config and not vim.lsp.config['*'] then
-    vim.lsp.config('*', {})
-end
-
 require("lazy").setup({
+    performance = {
+        rtp = {
+            disabled_plugins = {
+                "netrw", "netrwPlugin",
+                "matchit",
+                "tohtml",
+                "tutor",
+                "gzip", "tarPlugin", "zipPlugin",
+            },
+        },
+    },
 
     -- =============================================
     -- COLORSCHEMES
@@ -46,12 +52,31 @@ require("lazy").setup({
                 enable = { terminal = true, legacy_highlights = true, migrations = true },
                 styles = { bold = true, italic = false, transparency = false },
                 groups = {
-                    border = "muted", link = "iris", panel = "surface",
-                    error = "love", hint = "iris", info = "foam", note = "pine", todo = "rose", warn = "gold",
-                    git_add = "foam", git_change = "rose", git_delete = "love", git_dirty = "rose",
-                    git_ignore = "muted", git_merge = "iris", git_rename = "pine", git_stage = "iris",
-                    git_text = "rose", git_untracked = "subtle",
-                    h1 = "iris", h2 = "foam", h3 = "rose", h4 = "gold", h5 = "pine", h6 = "foam",
+                    border = "muted",
+                    link = "iris",
+                    panel = "surface",
+                    error = "love",
+                    hint = "iris",
+                    info = "foam",
+                    note = "pine",
+                    todo = "rose",
+                    warn = "gold",
+                    git_add = "foam",
+                    git_change = "rose",
+                    git_delete = "love",
+                    git_dirty = "rose",
+                    git_ignore = "muted",
+                    git_merge = "iris",
+                    git_rename = "pine",
+                    git_stage = "iris",
+                    git_text = "rose",
+                    git_untracked = "subtle",
+                    h1 = "iris",
+                    h2 = "foam",
+                    h3 = "rose",
+                    h4 = "gold",
+                    h5 = "pine",
+                    h6 = "foam",
                 },
             })
 
@@ -66,7 +91,8 @@ require("lazy").setup({
     -- =============================================
     {
         "williamboman/mason.nvim",
-        lazy = false,
+        cmd = { "Mason", "MasonInstall", "MasonUpdate" },
+        lazy = true,
         config = function()
             require("mason").setup({
                 registries = {
@@ -91,7 +117,8 @@ require("lazy").setup({
 
     {
         "neovim/nvim-lspconfig",
-        lazy = false,
+        lazy = true,
+        event = { "BufReadPre", "BufNewFile" },
         dependencies = { "saghen/blink.cmp" },
         config = function()
             local capabilities = require("blink.cmp").get_lsp_capabilities()
@@ -124,7 +151,8 @@ require("lazy").setup({
                 capabilities = capabilities,
                 cmd = { "clangd", "--background-index" },
                 filetypes = { "c", "cpp", "objc", "objcpp" },
-                root_dir = vim.fs.dirname(vim.fs.find({ "compile_commands.json", "compile_flags.txt", ".git" }, { upward = true })[1]),
+                root_dir = vim.fs.dirname(vim.fs.find({ "compile_commands.json", "compile_flags.txt", ".git" },
+                    { upward = true })[1]),
                 init_options = {
                     clangdFileStatus = true,
                     usePlaceholders = true,
@@ -185,7 +213,6 @@ require("lazy").setup({
                     end
                 end,
             })
-
         end,
     },
 
@@ -204,8 +231,9 @@ require("lazy").setup({
     -- =============================================
     {
         "saghen/blink.cmp",
+        event = "InsertEnter",
         dependencies = { "rafamadriz/friendly-snippets" },
-        version = "1.*",
+        version = "*",
         opts = {
             keymap = { preset = "default" },
             appearance = { nerd_font_variant = "mono" },
@@ -299,7 +327,8 @@ require("lazy").setup({
     -- =============================================
     {
         "nvim-treesitter/nvim-treesitter",
-        lazy = false,
+        event = { "BufReadPre", "BufNewFile" },
+        lazy = true,
         build = ":TSUpdate",
         config = function()
             local ts = require("nvim-treesitter")
@@ -350,7 +379,7 @@ require("lazy").setup({
         keys = {
             { "<leader>pf", desc = "Find files" },
             { "<leader>pg", desc = "Git files" },
-            { "<C-p>", desc = "Git files" },
+            { "<C-p>",      desc = "Git files" },
             { "<leader>ps", desc = "Grep string" },
             { "<leader>nc", desc = "Nvim config files" },
         },
@@ -400,14 +429,14 @@ require("lazy").setup({
         branch = "harpoon2",
         dependencies = { "nvim-lua/plenary.nvim" },
         keys = {
-            { "<C-s>", desc = "Harpoon menu" },
+            { "<C-s>",     desc = "Harpoon menu" },
             { "<leader>a", desc = "Harpoon add" },
-            { "<C-q>", desc = "Harpoon 1" },
-            { "<C-w>", desc = "Harpoon 2" },
-            { "<C-e>", desc = "Harpoon 3" },
-            { "<C-f>", desc = "Harpoon 4" },
-            { "<C-n>", desc = "Harpoon prev" },
-            { "<C-p>", desc = "Harpoon next" },
+            { "<C-q>",     desc = "Harpoon 1" },
+            { "<C-w>",     desc = "Harpoon 2" },
+            { "<C-e>",     desc = "Harpoon 3" },
+            { "<C-f>",     desc = "Harpoon 4" },
+            { "<C-n>",     desc = "Harpoon prev" },
+            { "<C-p>",     desc = "Harpoon next" },
         },
         config = function()
             local harpoon = require("harpoon")
@@ -456,19 +485,19 @@ require("lazy").setup({
         "tpope/vim-fugitive",
         cmd = { "Git", "G", "Gdiffsplit", "Gvdiffsplit" },
         keys = {
-            { "<leader>gs", desc = "Git status" },
-            { "<leader>gd", desc = "Git diff" },
-            { "<leader>gm", desc = "Git merge diff" },
-            { "<leader>gb", desc = "Git blame" },
-            { "<leader>gc", desc = "Git commit" },
-            { "<leader>gp", desc = "Git push" },
-            { "<leader>ga", desc = "Git add" },
-            { "<leader>go", desc = "Diffget ours" },
-            { "<leader>gt", desc = "Diffget theirs" },
+            { "<leader>gs",  desc = "Git status" },
+            { "<leader>gd",  desc = "Git diff" },
+            { "<leader>gm",  desc = "Git merge diff" },
+            { "<leader>gb",  desc = "Git blame" },
+            { "<leader>gc",  desc = "Git commit" },
+            { "<leader>gp",  desc = "Git push" },
+            { "<leader>ga",  desc = "Git add" },
+            { "<leader>go",  desc = "Diffget ours" },
+            { "<leader>gt",  desc = "Diffget theirs" },
             { "<leader>puo", desc = "Diffput ours" },
             { "<leader>put", desc = "Diffput theirs" },
-            { "[c", desc = "Diff next" },
-            { "]c", desc = "Diff prev" },
+            { "[c",          desc = "Diff next" },
+            { "]c",          desc = "Diff prev" },
         },
         config = function()
             vim.keymap.set("n", "<leader>gs", vim.cmd.Git)
@@ -509,7 +538,7 @@ require("lazy").setup({
         end,
     },
 
-    { "kokusenz/deltaview.nvim", cmd = { "DeltaView", "DeltaMenu" } },
+    { "kokusenz/deltaview.nvim",                    cmd = { "DeltaView", "DeltaMenu" } },
 
     -- =============================================
     -- TERMINAL
@@ -551,15 +580,15 @@ require("lazy").setup({
             { "rcarriga/nvim-dap-ui", dependencies = { "nvim-neotest/nvim-nio" } },
         },
         keys = {
-            { "<leader>b", desc = "Toggle breakpoint" },
-            { "<leader>dc", desc = "Debug continue" },
+            { "<leader>b",   desc = "Toggle breakpoint" },
+            { "<leader>dc",  desc = "Debug continue" },
             { "<leader>gtc", desc = "Run to cursor" },
-            { "<leader>?", desc = "DAP eval" },
-            { "<F2>", desc = "Step into" },
-            { "<F3>", desc = "Step over" },
-            { "<F4>", desc = "Step out" },
-            { "<F5>", desc = "Step back" },
-            { "<F13>", desc = "Restart" },
+            { "<leader>?",   desc = "DAP eval" },
+            { "<F2>",        desc = "Step into" },
+            { "<F3>",        desc = "Step over" },
+            { "<F4>",        desc = "Step out" },
+            { "<F5>",        desc = "Step back" },
+            { "<F13>",       desc = "Restart" },
         },
         config = function()
             local dap = require("dap")
@@ -701,21 +730,24 @@ require("lazy").setup({
                 discovery = { enabled = true },
             })
 
-            -- Auto-discover tests when in a .NET project
+            -- Auto-discover tests in the current file when opening a .cs file
             vim.defer_fn(function()
-                local cwd = vim.fn.getcwd()
-                local csproj = vim.fn.glob(cwd .. "/*.csproj")
-                if csproj ~= "" then
-                    neotest.run.run(cwd)
+                local bufname = vim.api.nvim_buf_get_name(0)
+                if bufname:match("%.cs$") then
+                    neotest.run.run(bufname)
                 end
-            end, 100)
+            end, 500)
 
             vim.keymap.set("n", "<leader>tr", function() neotest.run.run() end, { desc = "Run nearest test" })
-            vim.keymap.set("n", "<leader>tf", function() neotest.run.run(vim.fn.expand("%")) end, { desc = "Run all tests in file" })
-            vim.keymap.set("n", "<leader>td", function() neotest.run.run({ strategy = "dap" }) end, { desc = "Debug nearest test" })
+            vim.keymap.set("n", "<leader>tf", function() neotest.run.run(vim.fn.expand("%")) end,
+                { desc = "Run all tests in file" })
+            vim.keymap.set("n", "<leader>td", function() neotest.run.run({ strategy = "dap" }) end,
+                { desc = "Debug nearest test" })
             vim.keymap.set("n", "<leader>ts", function() neotest.summary.toggle() end, { desc = "Toggle test summary" })
-            vim.keymap.set("n", "<leader>to", function() neotest.output.open({ enter = true }) end, { desc = "Show test output" })
-            vim.keymap.set("n", "<leader>tp", function() neotest.output_panel.toggle() end, { desc = "Toggle output panel" })
+            vim.keymap.set("n", "<leader>to", function() neotest.output.open({ enter = true }) end,
+                { desc = "Show test output" })
+            vim.keymap.set("n", "<leader>tp", function() neotest.output_panel.toggle() end,
+                { desc = "Toggle output panel" })
         end,
     },
 
