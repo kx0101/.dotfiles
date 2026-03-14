@@ -35,6 +35,10 @@ function get_dirs(base_path, max_depth)
   return dirs
 end
 
+wezterm.on("update-right-status", function(window)
+  window:set_right_status(wezterm.strftime(" %H:%M  %d-%b-%y "))
+end)
+
 return {
   font = wezterm.font("IosevkaTermSlab Nerd Font Mono", { weight = "Regular", style = "Normal" }),
   font_size = 12.5,
@@ -181,7 +185,7 @@ return {
 	  key = "f",
 	  mods = "LEADER",
 	  action = wezterm.action_callback(function(window, pane)
-		local dirs = get_dirs("C:/Code", 3)
+		local dirs = get_dirs("C:/Users/ekoulaxis/Code", 3)
 		
 		wezterm.log_info("Found " .. #dirs .. " directories")
 		
