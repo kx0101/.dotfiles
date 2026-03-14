@@ -73,7 +73,7 @@ vim.opt.signcolumn = "yes"
 vim.opt.smartcase = true
 vim.opt.ignorecase = true
 
-vim.opt.updatetime = 50
+vim.opt.updatetime = 200
 
 vim.opt.colorcolumn = "80"
 if vim.fn.has("win32") == 1 then
@@ -86,5 +86,17 @@ vim.o.foldlevelstart = 99
 vim.o.foldenable = true
 
 vim.o.cursorline = true
+
+-- Disable expensive features for large files
+vim.api.nvim_create_autocmd("BufRead", {
+    callback = function()
+        local size = vim.fn.getfsize(vim.fn.expand("<afile>"))
+        if size > 1000000 then
+            vim.opt_local.cursorline = false
+            vim.opt_local.syntax = "off"
+            vim.opt_local.foldmethod = "manual"
+        end
+    end,
+})
 
 vim.g.netrw_banner = 0
