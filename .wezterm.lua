@@ -222,6 +222,10 @@ return {
                                     },
                                     p
                                 )
+
+                                wezterm.time.call_after(0.5, function()
+                                    win:active_tab():set_title(workspace_name)
+                                end)
                             end
                         end),
                     },
