@@ -700,54 +700,147 @@ require("lazy").setup({
         end,
     },
 
+    -- Lightweight C# test runner — no neotest, no subprocess, no freezing.
+    -- Uses dotnet test CLI directly with filters derived from the current buffer.
     {
-        "nvim-neotest/neotest",
-        dependencies = {
-            "nvim-neotest/nvim-nio",
-            "nvim-lua/plenary.nvim",
-            "nvim-treesitter/nvim-treesitter",
-            "Issafalcon/neotest-dotnet",
-        },
+        dir = vim.fn.stdpath("config"),
+        name = "dotnet-test-runner",
         ft = "cs",
         keys = {
             { "<leader>tr", desc = "Run nearest test" },
             { "<leader>tf", desc = "Run file tests" },
-            { "<leader>td", desc = "Debug nearest test" },
-            { "<leader>ts", desc = "Toggle test summary" },
-            { "<leader>to", desc = "Show test output" },
-            { "<leader>tp", desc = "Toggle output panel" },
         },
         config = function()
-            local neotest = require("neotest")
+            local last_cmd = nil
+            local last_bufnr = nil
 
-            neotest.setup({
-                adapters = {
-                    require("neotest-dotnet")({
-                        dap = { adapter_name = "coreclr" },
-                        discovery_root = "project",
-                    }),
-                },
-                discovery = { enabled = true },
-            })
-
-            -- Auto-discover tests in the current file when opening a .cs file
-            vim.defer_fn(function()
-                local bufname = vim.api.nvim_buf_get_name(0)
-                if bufname:match("%.cs$") then
-                    neotest.run.run(bufname)
+            local function find_csproj(start_path)
+                local dir = vim.fn.fnamemodify(start_path, ":h")
+                while dir and dir ~= "" do
+                    local matches = vim.fn.glob(dir .. "/*.csproj", false, true)
+                    if #matches == 0 then
+                        matches = vim.fn.glob(dir .. "\\*.csproj", false, true)
+                    end
+                    if #matches > 0 then
+                        return dir
+                    end
+                    local parent = vim.fn.fnamemodify(dir, ":h")
+                    if parent == dir then break end
+                    dir = parent
                 end
-            end, 500)
+            end
 
-            vim.keymap.set("n", "<leader>tr", function() neotest.run.run() end, { desc = "Run nearest test" })
-            vim.keymap.set("n", "<leader>tf", function() neotest.run.run(vim.fn.expand("%")) end,
-                { desc = "Run all tests in file" })
-            vim.keymap.set("n", "<leader>td", function() neotest.run.run({ strategy = "dap" }) end,
-                { desc = "Debug nearest test" })
-            vim.keymap.set("n", "<leader>ts", function() neotest.summary.toggle() end, { desc = "Toggle test summary" })
-            vim.keymap.set("n", "<leader>to", function() neotest.output.open({ enter = true }) end,
-                { desc = "Show test output" })
-            vim.keymap.set("n", "<leader>tp", function() neotest.output_panel.toggle() end,
-                { desc = "Toggle output panel" })
+            local function get_namespace(lines)
+                for _, line in ipairs(lines) do
+                    local ns = line:match("^%s*namespace%s+([%w%.]+)")
+                    if ns then return ns end
+                end
+            end
+
+            local function get_classes(lines)
+                local classes = {}
+                for _, line in ipairs(lines) do
+                    local class = line:match("^%s*public%s+class%s+(%w+)")
+                    if class then
+                        table.insert(classes, class)
+                    end
+                end
+                return classes
+            end
+
+            local function run_in_split(cmd)
+                if last_bufnr and vim.api.nvim_buf_is_valid(last_bufnr) then
+                    local wins = vim.fn.win_findbuf(last_bufnr)
+                    for _, win in ipairs(wins) do
+                        vim.api.nvim_win_close(win, true)
+                    end
+                end
+
+                last_cmd = cmd
+                vim.cmd("botright new | resize 15")
+                vim.fn.termopen(cmd)
+                last_bufnr = vim.api.nvim_get_current_buf()
+                vim.cmd("wincmd p")
+            end
+
+            local function dotnet_test_file()
+                local file = vim.fn.expand("%:p")
+                if not file:match("%.cs$") then
+                    vim.notify("Not a C# file", vim.log.levels.WARN)
+                    return
+                end
+
+                local proj_root = find_csproj(file)
+                if not proj_root then
+                    vim.notify("No .csproj found", vim.log.levels.ERROR)
+                    return
+                end
+
+                local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+                local ns = get_namespace(lines)
+                local classes = get_classes(lines)
+
+                local cmd = "dotnet test " .. vim.fn.shellescape(proj_root) .. " --nologo"
+                if ns and #classes > 0 then
+                    local filter_parts = {}
+                    for _, c in ipairs(classes) do
+                        table.insert(filter_parts, "FullyQualifiedName~" .. ns .. "." .. c)
+                    end
+                    cmd = cmd .. " --filter " .. vim.fn.shellescape(table.concat(filter_parts, "|"))
+                elseif #classes > 0 then
+                    local filter_parts = {}
+                    for _, c in ipairs(classes) do
+                        table.insert(filter_parts, "FullyQualifiedName~" .. c)
+                    end
+                    cmd = cmd .. " --filter " .. vim.fn.shellescape(table.concat(filter_parts, "|"))
+                end
+
+                run_in_split(cmd)
+            end
+
+            local function dotnet_test_nearest()
+                local file = vim.fn.expand("%:p")
+                if not file:match("%.cs$") then
+                    vim.notify("Not a C# file", vim.log.levels.WARN)
+                    return
+                end
+
+                local proj_root = find_csproj(file)
+                if not proj_root then
+                    vim.notify("No .csproj found", vim.log.levels.ERROR)
+                    return
+                end
+
+                local row = vim.fn.line(".")
+                local lines = vim.api.nvim_buf_get_lines(0, 0, row, false)
+                local test_name
+                for i = #lines, 1, -1 do
+                    test_name = lines[i]:match("public%s+[%w<>%[%]%?]+%s+([%w_]+)%s*%(")
+                    if test_name then break end
+                end
+
+                if not test_name then
+                    vim.notify("No test method found above cursor", vim.log.levels.WARN)
+                    return
+                end
+
+                local cmd = "dotnet test " .. vim.fn.shellescape(proj_root) .. " --nologo"
+                    .. " --filter " .. vim.fn.shellescape("FullyQualifiedName~" .. test_name)
+
+                run_in_split(cmd)
+            end
+
+            local function dotnet_test_rerun()
+                if last_cmd then
+                    run_in_split(last_cmd)
+                else
+                    vim.notify("No previous test run", vim.log.levels.WARN)
+                end
+            end
+
+            vim.keymap.set("n", "<leader>tf", dotnet_test_file, { desc = "Run all tests in file" })
+            vim.keymap.set("n", "<leader>tr", dotnet_test_nearest, { desc = "Run nearest test" })
+            vim.keymap.set("n", "<leader>tl", dotnet_test_rerun, { desc = "Re-run last test" })
         end,
     },
 
