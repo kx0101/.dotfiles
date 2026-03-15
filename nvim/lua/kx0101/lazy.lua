@@ -105,7 +105,7 @@ require("lazy").setup({
 
     {
         "williamboman/mason-lspconfig.nvim",
-        lazy = false,
+        event = "BufReadPre",
         dependencies = { "williamboman/mason.nvim", "neovim/nvim-lspconfig" },
         opts = {
             ensure_installed = { "lua_ls", "gopls", "clangd" },
@@ -293,8 +293,8 @@ require("lazy").setup({
                     },
                     ["csharp|background_analysis"] = {
                         background_analysis = {
-                            dotnet_analyzer_diagnostics_scope = "fullSolution",
-                            dotnet_compiler_diagnostics_scope = "fullSolution",
+                            dotnet_analyzer_diagnostics_scope = "openFiles",
+                            dotnet_compiler_diagnostics_scope = "openFiles",
                         },
                     },
                     ["csharp|symbol_search"] = {
@@ -338,7 +338,7 @@ require("lazy").setup({
             local installed = ts.get_installed()
             for _, lang in ipairs(ensure_installed) do
                 if not vim.tbl_contains(installed, lang) then
-                    ts.install({ lang })
+                    vim.defer_fn(function() ts.install({ lang }) end, 2000)
                 end
             end
 
@@ -519,7 +519,13 @@ require("lazy").setup({
     {
         "lewis6991/gitsigns.nvim",
         event = "VeryLazy",
-        opts = { current_line_blame = true },
+        opts = {
+            current_line_blame = false,
+            current_line_blame_opts = { delay = 500 },
+        },
+        keys = {
+            { "<leader>gb", function() require("gitsigns").toggle_current_line_blame() end, desc = "Toggle git blame" },
+        },
     },
 
     {
@@ -908,8 +914,8 @@ require("lazy").setup({
             _99.setup({
                 model = "opencode/gpt-5-nano",
                 logger = {
-                    level = _99.DEBUG,
-                    path = log_dir .. "/" .. basename .. ".99.debug",
+                    level = _99.INFO,
+                    path = log_dir .. "/" .. basename .. ".99.log",
                     print_on_error = true,
                 },
                 md_files = { "AGENT.md" },
