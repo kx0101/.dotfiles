@@ -44,8 +44,8 @@ require("lazy").setup({
         priority = 1000,
         config = function()
             require("rose-pine").setup({
-                variant = "main",
-                dark_variant = "main",
+                variant = "moon",
+                dark_variant = "moon",
                 disable_background = false,
                 dim_inactive_windows = false,
                 extend_background_behind_borders = true,
