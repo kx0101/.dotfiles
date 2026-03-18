@@ -1,5 +1,6 @@
 local wezterm = require("wezterm")
 local act = wezterm.action
+local rose_pine = wezterm.plugin.require('https://github.com/neapsix/wezterm').moon
 
 function get_dirs(base_path, max_depth)
     local dirs = {}
@@ -43,45 +44,7 @@ return {
 
     term = "xterm-256color",
 
-    colors = {
-        foreground = "#F5F5F5",
-        background = "#181818",
-        cursor_bg = "#FFDD33",
-        cursor_border = "#FFDD33",
-        cursor_fg = "#181818",
-        selection_bg = "#453D41",
-        selection_fg = "#F4F4FF",
-
-        tab_bar = {
-            background = "#333333",
-            active_tab = {
-                bg_color = "#333333",
-                fg_color = "#ADD8E6",
-                intensity = "Bold",
-            },
-            inactive_tab = {
-                bg_color = "#333333",
-                fg_color = "#888888",
-            },
-            inactive_tab_hover = {
-                bg_color = "#444444",
-                fg_color = "#ADD8E6",
-            },
-            new_tab = {
-                bg_color = "#333333",
-                fg_color = "#ADD8E6",
-            },
-        },
-
-        ansi = {
-            "#181818", "#F43841", "#73D936", "#FFDD33",
-            "#96A6C8", "#9E95C7", "#95A99F", "#F5F5F5",
-        },
-        brights = {
-            "#52494E", "#F43841", "#73D936", "#FFDD33",
-            "#96A6C8", "#9E95C7", "#95A99F", "#FFFFFF",
-        },
-    },
+    colors = rose_pine.colors(),
 
     window_decorations = "RESIZE",
     window_background_opacity = 1.0,
