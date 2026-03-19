@@ -46,7 +46,7 @@ return {
 
     colors = rose_pine.colors(),
 
-    window_decorations = "RESIZE",
+    window_decorations = "RESIZE | TITLE",
     window_background_opacity = 1.0,
 
     window_padding = {
@@ -65,7 +65,10 @@ return {
     enable_scroll_bar = false,
     enable_tab_bar = true,
 
-    front_end = "WebGpu",
+    front_end = "OpenGL",
+    prefer_egl = true,
+    animation_fps = 1,
+    cursor_blink_rate = 0,
     max_fps = 120,
     scrollback_lines = 10000,
 
@@ -187,7 +190,14 @@ return {
                                 )
 
                                 wezterm.time.call_after(0.5, function()
-                                    win:active_tab():set_title(workspace_name)
+                                    for _, mux_win in ipairs(wezterm.mux.all_windows()) do
+                                        if mux_win:get_workspace() == workspace_name then
+                                            local tabs = mux_win:tabs()
+                                            if #tabs > 0 then
+                                                tabs[1]:set_title(workspace_name)
+                                            end
+                                        end
+                                    end
                                 end)
                             end
                         end),
