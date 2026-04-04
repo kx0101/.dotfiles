@@ -1,10 +1,10 @@
 vim.opt.termguicolors = true
 
 if vim.fn.has("win32") == 1 then
-    vim.opt.shell = "cmd.exe"
-    vim.opt.shellcmdflag = "/s /c"
+    vim.opt.shell = '"C:/Program Files/PowerShell/7/pwsh.exe"'
+    vim.opt.shellcmdflag = "-NoLogo -NoProfile -Command"
     vim.opt.shellquote = ""
-    vim.opt.shellxquote = "("
+    vim.opt.shellxquote = ""
 else
     vim.opt.shell = "/usr/bin/zsh"
     vim.opt.shellcmdflag = "-c"
@@ -38,14 +38,23 @@ vim.keymap.set("n", "<leader>bt", function()
 
     vim.cmd("botright 10split | terminal")
     local job_id = vim.b.terminal_job_id
-    vim.fn.chansend(job_id, cmd .. "\n")
-    vim.cmd("startinsert")
+
+    local timer = vim.uv.new_timer()
+    timer:start(2000, 0, vim.schedule_wrap(function()
+        vim.fn.chansend(job_id, cmd .. "\r")
+        timer:close()
+    end))
 end, { silent = true })
 
 vim.keymap.set("n", "<leader>bb", function()
     vim.cmd("botright 10split | terminal")
-    vim.fn.chansend(vim.b.terminal_job_id, last_term_cmd .. "\n")
-    vim.cmd("startinsert")
+    local job_id = vim.b.terminal_job_id
+
+    local timer = vim.uv.new_timer()
+    timer:start(2000, 0, vim.schedule_wrap(function()
+        vim.fn.chansend(job_id, last_term_cmd .. "\r")
+        timer:close()
+    end))
 end, { silent = true })
 
 vim.opt.nu = true
@@ -75,7 +84,11 @@ vim.opt.ignorecase = true
 
 vim.opt.updatetime = 200
 
-vim.opt.colorcolumn = "80"
+vim.opt.colorcolumn = ""
+
+-- Visible whitespace (Tsoding-style dots)
+vim.opt.list = true
+vim.opt.listchars = { space = "·", tab = "··", trail = "·", nbsp = "␣" }
 if vim.fn.has("win32") == 1 then
     vim.opt.fileformat = "dos"
 end

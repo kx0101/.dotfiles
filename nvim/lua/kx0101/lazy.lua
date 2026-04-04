@@ -27,7 +27,8 @@ require("lazy").setup({
     -- =============================================
     {
         "blazkowolf/gruber-darker.nvim",
-        lazy = true,
+        lazy = false,
+        priority = 1000,
         opts = {
             bold = true,
             invert = { signs = false, tabline = false, visual = false },
@@ -35,55 +36,53 @@ require("lazy").setup({
             undercurl = true,
             underline = true,
         },
+        config = function(_, opts)
+            require("gruber-darker").setup(opts)
+            vim.cmd.colorscheme("gruber-darker")
+            vim.cmd [[highlight CopilotSuggestion guifg=#555555 ctermfg=8]]
+        end,
     },
 
     {
         "rose-pine/neovim",
         name = "rose-pine",
-        lazy = false,
-        priority = 1000,
-        config = function()
-            require("rose-pine").setup({
-                variant = "moon",
-                dark_variant = "moon",
-                disable_background = false,
-                dim_inactive_windows = false,
-                extend_background_behind_borders = true,
-                enable = { terminal = true, legacy_highlights = true, migrations = true },
-                styles = { bold = true, italic = false, transparency = false },
-                groups = {
-                    border = "muted",
-                    link = "iris",
-                    panel = "surface",
-                    error = "love",
-                    hint = "iris",
-                    info = "foam",
-                    note = "pine",
-                    todo = "rose",
-                    warn = "gold",
-                    git_add = "foam",
-                    git_change = "rose",
-                    git_delete = "love",
-                    git_dirty = "rose",
-                    git_ignore = "muted",
-                    git_merge = "iris",
-                    git_rename = "pine",
-                    git_stage = "iris",
-                    git_text = "rose",
-                    git_untracked = "subtle",
-                    h1 = "iris",
-                    h2 = "foam",
-                    h3 = "rose",
-                    h4 = "gold",
-                    h5 = "pine",
-                    h6 = "foam",
-                },
-            })
-
-            vim.cmd.colorscheme("rose-pine")
-            vim.o.background = "dark"
-            vim.cmd [[highlight CopilotSuggestion guifg=#555555 ctermfg=8]]
-        end,
+        lazy = true,
+        opts = {
+            variant = "moon",
+            dark_variant = "moon",
+            disable_background = false,
+            dim_inactive_windows = false,
+            extend_background_behind_borders = true,
+            enable = { terminal = true, legacy_highlights = true, migrations = true },
+            styles = { bold = true, italic = false, transparency = false },
+            groups = {
+                border = "muted",
+                link = "iris",
+                panel = "surface",
+                error = "love",
+                hint = "iris",
+                info = "foam",
+                note = "pine",
+                todo = "rose",
+                warn = "gold",
+                git_add = "foam",
+                git_change = "rose",
+                git_delete = "love",
+                git_dirty = "rose",
+                git_ignore = "muted",
+                git_merge = "iris",
+                git_rename = "pine",
+                git_stage = "iris",
+                git_text = "rose",
+                git_untracked = "subtle",
+                h1 = "iris",
+                h2 = "foam",
+                h3 = "rose",
+                h4 = "gold",
+                h5 = "pine",
+                h6 = "foam",
+            },
+        },
     },
 
     -- =============================================
@@ -237,6 +236,7 @@ require("lazy").setup({
         opts = {
             keymap = { preset = "default" },
             appearance = { nerd_font_variant = "mono" },
+            fuzzy = { implementation = "prefer_rust" },
             completion = {
                 documentation = {
                     auto_show = true,
@@ -327,6 +327,7 @@ require("lazy").setup({
     -- =============================================
     {
         "nvim-treesitter/nvim-treesitter",
+        commit = "7caec274fd19c12b55902a5b795100d21531391f",
         event = { "BufReadPre", "BufNewFile" },
         lazy = true,
         build = ":TSUpdate",
@@ -924,6 +925,18 @@ require("lazy").setup({
             vim.keymap.set("n", "<leader>9f", function() _99.fill_in_function() end)
             vim.keymap.set("v", "<leader>9v", function() _99.visual() end)
             vim.keymap.set("v", "<leader>9s", function() _99.stop_all_requests() end)
+        end,
+    },
+
+    -- =============================================
+    -- COPILOT
+    -- =============================================
+    {
+        "github/copilot.vim",
+        cmd = "Copilot",
+        event = "InsertEnter",
+        init = function()
+            vim.g.copilot_settings = { selectedCompletionModel = "claude-opus-4.6" }
         end,
     },
 
