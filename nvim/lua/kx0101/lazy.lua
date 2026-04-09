@@ -121,6 +121,10 @@ require("lazy").setup({
         dependencies = { "saghen/blink.cmp" },
         config = function()
             local capabilities = require("blink.cmp").get_lsp_capabilities()
+            capabilities.workspace = capabilities.workspace or {}
+            capabilities.workspace.didChangeWatchedFiles = {
+                dynamicRegistration = false,
+            }
 
             vim.lsp.config("lua_ls", {
                 capabilities = capabilities,
