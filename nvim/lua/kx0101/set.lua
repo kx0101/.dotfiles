@@ -87,7 +87,7 @@ vim.opt.updatetime = 200
 vim.opt.colorcolumn = ""
 
 -- Visible whitespace (Tsoding-style dots)
-vim.opt.list = true
+vim.opt.list = false
 vim.opt.listchars = { space = "·", tab = "··", trail = "·", nbsp = "␣" }
 if vim.fn.has("win32") == 1 then
     vim.opt.fileformat = "dos"

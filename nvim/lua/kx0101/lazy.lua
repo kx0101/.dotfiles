@@ -27,8 +27,7 @@ require("lazy").setup({
     -- =============================================
     {
         "blazkowolf/gruber-darker.nvim",
-        lazy = false,
-        priority = 1000,
+        lazy = true,
         opts = {
             bold = true,
             invert = { signs = false, tabline = false, visual = false },
@@ -36,20 +35,16 @@ require("lazy").setup({
             undercurl = true,
             underline = true,
         },
-        config = function(_, opts)
-            require("gruber-darker").setup(opts)
-            vim.cmd.colorscheme("gruber-darker")
-            vim.cmd [[highlight CopilotSuggestion guifg=#555555 ctermfg=8]]
-        end,
     },
 
     {
         "rose-pine/neovim",
         name = "rose-pine",
-        lazy = true,
+        lazy = false,
+        priority = 1000,
         opts = {
-            variant = "moon",
-            dark_variant = "moon",
+            variant = "main",
+            dark_variant = "main",
             disable_background = false,
             dim_inactive_windows = false,
             extend_background_behind_borders = true,
@@ -83,6 +78,10 @@ require("lazy").setup({
                 h6 = "foam",
             },
         },
+        config = function(_, opts)
+            require("rose-pine").setup(opts)
+            vim.cmd.colorscheme("rose-pine")
+        end,
     },
 
     -- =============================================
