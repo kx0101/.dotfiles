@@ -193,7 +193,6 @@ require("lazy").setup({
             -- LspAttach keybindings
             vim.api.nvim_create_autocmd("LspAttach", {
                 callback = function(args)
-                    local client = vim.lsp.get_client_by_id(args.data.client_id)
                     local opts = { buffer = args.buf, silent = true, noremap = true }
 
                     vim.keymap.set("n", "gd", vim.lsp.buf.definition, opts)
@@ -208,11 +207,8 @@ require("lazy").setup({
                     vim.keymap.set("n", "<leader>vrr", vim.lsp.buf.references, opts)
                     vim.keymap.set("n", "<leader>vrn", vim.lsp.buf.rename, opts)
 
-                    if client and client.server_capabilities.codeLensProvider then
-                        -- nvim 0.12: codelens.refresh() is deprecated; enable() sets up
-                        -- the buffer and auto-refreshes on changes, so no autocmd needed.
-                        vim.lsp.codelens.enable(true, { bufnr = args.buf })
-                    end
+                    -- CodeLens (Run | Debug | references) disabled globally.
+                    vim.lsp.codelens.enable(false, { bufnr = args.buf })
                 end,
             })
         end,
@@ -316,8 +312,8 @@ require("lazy").setup({
                         dotnet_suppress_inlay_hints_for_parameters_that_match_method_intent = true,
                     },
                     ["csharp|code_lens"] = {
-                        dotnet_enable_references_code_lens = true,
-                        dotnet_enable_tests_code_lens = true,
+                        dotnet_enable_references_code_lens = false,
+                        dotnet_enable_tests_code_lens = false,
                     },
                     ["csharp|completion"] = {
                         dotnet_provide_regex_completions = true,
