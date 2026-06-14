@@ -1,9 +1,32 @@
 #!/usr/bin/env bash
 
-version="10.0"
+version="11.0"
 
 echo "version: \"$version\""
 
-wget https://dot.net/v1/dotnet-install.sh -O dotnet-install.sh
-chmod +x ./dotnet-install.sh
-./dotnet-install.sh --channel $version
+case "$(uname -s)" in
+    MINGW* | MSYS* | CYGWIN*)
+        # Native Windows (Git Bash / MSYS): install the .NET SDK via the PowerShell
+        # installer, plus the .NET Framework 4.7.2 Developer Pack. The net472 runtime
+        # ships with Windows, but the targeting/dev pack is required to BUILD projects
+        # that target net472.
+        echo "Windows detected: installing .NET SDK $version + .NET Framework 4.7.2 dev pack"
+
+        powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \
+            "Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile dotnet-install.ps1; ./dotnet-install.ps1 -Channel $version"
+
+        if command -v choco > /dev/null 2>&1; then
+            choco install -y netfx-4.7.2-devpack
+        else
+            echo "choco not found. Install the .NET Framework 4.7.2 Developer Pack manually:"
+            echo "  https://dotnet.microsoft.com/download/dotnet-framework/net472"
+            echo "  (or: choco install -y netfx-4.7.2-devpack)"
+        fi
+        ;;
+    *)
+        # Linux / macOS
+        wget https://dot.net/v1/dotnet-install.sh -O dotnet-install.sh
+        chmod +x ./dotnet-install.sh
+        ./dotnet-install.sh --channel $version
+        ;;
+esac

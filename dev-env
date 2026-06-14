@@ -56,7 +56,10 @@ copy_file() {
     execute cp $from $to/$name
 }
 
-copy_dir .config $HOME/.config
+execute mkdir -p $HOME/.config/nvim
+copy_dir nvim $HOME/.config/nvim
+copy_file nvim/init.lua $HOME/.config/nvim
+
 copy_file config $HOME/.config/ghostty
 copy_file .tmux.conf $HOME
 copy_file .ideavimrc $HOME

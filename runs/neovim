@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-version="v0.11.0"
+version="v0.12.0"
 
 echo "version: \"$version\""
 
