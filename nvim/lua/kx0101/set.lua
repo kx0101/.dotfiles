@@ -1,4 +1,5 @@
 vim.opt.termguicolors = true
+vim.o.background = "dark"
 
 if vim.fn.has("win32") == 1 then
     vim.opt.shell = '"C:/Program Files/PowerShell/7/pwsh.exe"'

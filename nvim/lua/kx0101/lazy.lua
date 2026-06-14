@@ -208,10 +208,9 @@ require("lazy").setup({
                     vim.keymap.set("n", "<leader>vrn", vim.lsp.buf.rename, opts)
 
                     if client and client.server_capabilities.codeLensProvider then
-                        vim.api.nvim_create_autocmd({ "BufEnter", "BufWritePost" }, {
-                            buffer = args.buf,
-                            callback = vim.lsp.codelens.refresh,
-                        })
+                        -- nvim 0.12: codelens.refresh() is deprecated; enable() sets up
+                        -- the buffer and auto-refreshes on changes, so no autocmd needed.
+                        vim.lsp.codelens.enable(true, { bufnr = args.buf })
                     end
                 end,
             })
@@ -267,9 +266,39 @@ require("lazy").setup({
         "seblyng/roslyn.nvim",
         ft = "cs",
         dependencies = { "saghen/blink.cmp" },
-        config = function()
+        -- Register the server config at startup (in init), so it is already in place
+        -- when roslyn.nvim's plugin/roslyn.lua runs `vim.lsp.enable("roslyn")` on the
+        -- first C# buffer. Otherwise the native auto-start races ahead of the lazy
+        -- `config` function and spawns the wrong (default) cmd, which fails.
+        init = function()
+            -- Resolve the Mason-installed roslyn server. The Mason package/shim is
+            -- named "roslyn", but roslyn.nvim looks for "roslyn-language-server", so
+            -- point cmd at the shim explicitly to avoid spawn failures. The raw
+            -- Microsoft.CodeAnalysis.LanguageServer also requires --logLevel and
+            -- --extensionLogDirectory, so pass them here.
+            local mason_root = vim.fn.expand("$MASON")
+            if mason_root == "$MASON" then
+                mason_root = vim.fs.joinpath(vim.fn.stdpath("data"), "mason")
+            end
+            local roslyn_bin = vim.fs.joinpath(
+                mason_root,
+                "bin",
+                vim.fn.has("win32") == 1 and "roslyn.cmd" or "roslyn"
+            )
+            local roslyn_log_dir = vim.fs.joinpath(vim.fn.stdpath("log"), "roslyn")
+            vim.fn.mkdir(roslyn_log_dir, "p")
+
             vim.lsp.config("roslyn", {
-                capabilities = require("blink.cmp").get_lsp_capabilities(),
+                cmd = vim.fn.executable(roslyn_bin) == 1 and {
+                    roslyn_bin,
+                    "--logLevel=Information",
+                    "--extensionLogDirectory=" .. roslyn_log_dir,
+                    "--stdio",
+                } or nil,
+                capabilities = (function()
+                    local ok, blink = pcall(require, "blink.cmp")
+                    return ok and blink.get_lsp_capabilities() or nil
+                end)(),
                 settings = {
                     ["csharp|inlay_hints"] = {
                         csharp_enable_inlay_hints_for_implicit_object_creation = true,
@@ -308,7 +337,8 @@ require("lazy").setup({
                     },
                 },
             })
-
+        end,
+        config = function()
             require("roslyn").setup({
                 filewatching = "off",
                 broad_search = false,
@@ -940,6 +970,7 @@ require("lazy").setup({
         event = "InsertEnter",
         init = function()
             vim.g.copilot_settings = { selectedCompletionModel = "claude-opus-4.6" }
+            vim.cmd([[highlight CopilotSuggestion guifg=#555555 ctermfg=8]])
         end,
     },
 
