@@ -174,6 +174,7 @@ require("lazy").setup({
                 capabilities = capabilities,
                 settings = {
                     ["rust-analyzer"] = {
+                        lens = { enable = false },
                         cargo = { allFeatures = true },
                         check = {
                             command = "clippy",
