@@ -6,10 +6,23 @@ function M:setup()
         package.config:sub(1, 1) .. "jdtls-workspace" .. package.config:sub(1, 1) .. project_name
     local os_name = vim.loop.os_uname().sysname
 
+    -- jdtls >= 1.34 requires JDK 21+ to run. On Windows the default `java` on PATH
+    -- may be older (e.g. JDK 17), so prefer an installed JDK 21 if one is present.
+    local java_cmd = "java"
+    if vim.fn.has("win32") == 1 then
+        local jdk21 = vim.fn.glob("C:/Program Files/Microsoft/jdk-21*/bin/java.exe", true, true)
+        if #jdk21 == 0 then
+            jdk21 = vim.fn.glob("C:/Program Files/Eclipse Adoptium/jdk-21*/bin/java.exe", true, true)
+        end
+        if #jdk21 > 0 then
+            java_cmd = jdk21[1]
+        end
+    end
+
     local config = {
         cmd = {
 
-            "java",
+            java_cmd,
 
             "-Declipse.application=org.eclipse.jdt.ls.core.id1",
             "-Dosgi.bundles.defaultStartLevel=4",
@@ -24,15 +37,15 @@ function M:setup()
             "java.base/java.lang=ALL-UNNAMED",
 
             "-jar",
-            vim.fn.stdpath("data") ..
-            package.config:sub(1, 1) ..
-            "mason" ..
-            package.config:sub(1, 1) ..
-            "packages" ..
-            package.config:sub(1, 1) ..
-            "jdtls" ..
-            package.config:sub(1, 1) ..
-            "plugins" .. package.config:sub(1, 1) .. "org.eclipse.equinox.launcher_1.7.0.v20250519-0528.jar",
+            vim.fn.glob(vim.fn.stdpath("data") ..
+                package.config:sub(1, 1) ..
+                "mason" ..
+                package.config:sub(1, 1) ..
+                "packages" ..
+                package.config:sub(1, 1) ..
+                "jdtls" ..
+                package.config:sub(1, 1) ..
+                "plugins" .. package.config:sub(1, 1) .. "org.eclipse.equinox.launcher_*.jar"),
             "-configuration",
             vim.fn.stdpath("data") ..
             package.config:sub(1, 1) ..
