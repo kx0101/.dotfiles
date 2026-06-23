@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# macOS UI tweaks for snappy app/window switching. No-op on Linux.
+#
+# Hammerspoon focus is already instant; what makes macOS feel sluggish is the
+# built-in animations (especially the slide when you focus an app living on
+# another Space). These defaults remove/speed them up.
+
+[ "$(uname -s)" = "Darwin" ] || exit 0
+
+set -e
+
+# --- Window + app animations ---
+# Disable the open/close zoom animation on windows and dialogs
+defaults write NSGlobalDomain NSAutomaticWindowAnimationsEnabled -bool false
+# Near-instant window resize
+defaults write NSGlobalDomain NSWindowResizeTime -float 0.001
+
+# --- Dock / Mission Control / Spaces ---
+# Speed up Mission Control and the cross-Space slide when focusing an app
+defaults write com.apple.dock expose-animation-duration -float 0.1
+# No app-launch bounce
+defaults write com.apple.dock launchanim -bool false
+# Instant Dock autohide (only relevant if you auto-hide the Dock)
+defaults write com.apple.dock autohide-time-modifier -float 0
+defaults write com.apple.dock autohide-delay -float 0
+
+# --- Reduce Motion: the single biggest win for switching ---
+# Turns the cross-Space SLIDE into an instant cross-fade. It is global (affects
+# all system animations). Disable with: REDUCE_MOTION=0 ./runs/macos-defaults
+if [ "${REDUCE_MOTION:-1}" = "1" ]; then
+    defaults write com.apple.universalaccess reduceMotion -bool true
+fi
+
+killall Dock 2>/dev/null || true
+
+echo "macOS animation tweaks applied."
+echo "Reduce Motion may need a logout/login to fully apply; if it doesn't stick,"
+echo "toggle it in System Settings > Accessibility > Display > Reduce Motion."
