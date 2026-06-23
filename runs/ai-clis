@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -e
+
+# GitHub Copilot CLI + Anthropic Claude Code CLI (both distributed via npm).
+# Your Neovim already uses github/copilot.vim; these are the standalone terminal
+# agents.
+
+# Ensure npm exists (the node run-script normally installs it first).
+if ! command -v npm > /dev/null 2>&1; then
+    case "$(uname -s)" in
+        Darwin)
+            brew install node
+            ;;
+        *)
+            echo "npm not found. Run ./runs/node first, then re-run ./runs/ai-clis."
+            exit 1
+            ;;
+    esac
+fi
+
+echo "Installing GitHub Copilot CLI and Claude Code CLI..."
+npm install -g @github/copilot @anthropic-ai/claude-code
+
+# gh is handy for Copilot auth and general GitHub work.
+if ! command -v gh > /dev/null 2>&1 && [ "$(uname -s)" = "Darwin" ]; then
+    brew install gh
+fi
+
+echo "Done. Authenticate with: copilot   and   claude"

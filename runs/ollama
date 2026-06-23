@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -e
+
+# Local coding model for Ollama. qwen2.5-coder:32b (~20GB, Q4_K_M) is one of the
+# strongest local coding models and fits comfortably in 48GB unified memory.
+# Override with: OLLAMA_MODEL=<name> ./runs/ollama
+# Other good options:
+#   qwen2.5-coder:14b / :7b   (smaller, faster)
+#   qwen3-coder:30b           (newer MoE, very fast)
+#   deepseek-coder-v2:16b
+MODEL="${OLLAMA_MODEL:-qwen2.5-coder:32b}"
+
+case "$(uname -s)" in
+    Darwin)
+        if ! command -v ollama > /dev/null 2>&1; then
+            # CLI + server. For the menu-bar app instead: brew install --cask ollama-app
+            brew install ollama
+        fi
+        ;;
+    *)
+        if ! command -v ollama > /dev/null 2>&1; then
+            curl -fsSL https://ollama.com/install.sh | sh
+        fi
+        ;;
+esac
+
+# Make sure the server is reachable before pulling (Linux installer registers a
+# systemd service; on macOS the formula needs a manual `ollama serve`).
+if ! curl -fsS http://localhost:11434/api/tags > /dev/null 2>&1; then
+    echo "Starting ollama server..."
+    ollama serve > /tmp/ollama-serve.log 2>&1 &
+    sleep 3
+fi
+
+echo "Pulling Ollama model: $MODEL"
+ollama pull "$MODEL"

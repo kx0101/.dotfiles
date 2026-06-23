@@ -1,6 +1,25 @@
 #!/usr/bin/env bash
 set -e
 
+if [ "$(uname -s)" = "Darwin" ]; then
+    echo "Installing Nerd Fonts via Homebrew..."
+    fonts=(
+        font-hack-nerd-font
+        font-fira-code-nerd-font
+        font-caskaydia-cove-nerd-font
+        font-sauce-code-pro-nerd-font
+        font-agave-nerd-font
+        font-jetbrains-mono-nerd-font
+        font-iosevka-term-nerd-font
+        font-iosevka-term-slab-nerd-font
+    )
+    for f in "${fonts[@]}"; do
+        brew install --cask "$f" || echo "  (skipped $f)"
+    done
+    echo "All fonts installed successfully"
+    exit 0
+fi
+
 FONT_DIR="$HOME/.local/share/fonts"
 mkdir -p "$FONT_DIR"
 cd "$FONT_DIR"

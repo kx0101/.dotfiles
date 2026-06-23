@@ -1,20 +1,38 @@
 #!/usr/bin/env bash
-sudo apt -y update
+case "$(uname -s)" in
+    Darwin)
+        # Xcode Command Line Tools (Homebrew also pulls these in)
+        if ! xcode-select -p > /dev/null 2>&1; then
+            echo "Requesting Xcode Command Line Tools install..."
+            xcode-select --install || true
+        fi
 
-if ! command -v git &> /dev/null; then
-    sudo apt -y install git
-fi
+        # Homebrew
+        if ! command -v brew > /dev/null 2>&1; then
+            echo "Installing Homebrew..."
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        fi
+        eval "$(/opt/homebrew/bin/brew shellenv)"
 
-if [ ! -d $HOME/personal ]; then
-    mkdir $HOME/personal
-fi
+        if ! command -v git > /dev/null 2>&1; then
+            brew install git
+        fi
+        ;;
+    *)
+        sudo apt -y update
 
-if [ ! -d $HOME/.local/bin ]; then
-    mkdir $HOME/.local/bin
-fi
+        if ! command -v git &> /dev/null; then
+            sudo apt -y install git
+        fi
+        ;;
+esac
 
+mkdir -p $HOME/personal
 mkdir -p $HOME/.local/bin
-git clone https://github.com/kx0101/.dotfiles $HOME/personal/.dotfiles
+
+if [ ! -d $HOME/personal/.dotfiles ]; then
+    git clone https://github.com/kx0101/.dotfiles $HOME/personal/.dotfiles
+fi
 
 pushd $HOME/personal/.dotfiles
 ./run

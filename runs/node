@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
 
-sudo apt install nodejs npm
-npm config set prefix ~/.local/npm
-npm i -g n
-n lts
+case "$(uname -s)" in
+    Darwin)
+        brew install node
+        ;;
+    *)
+        sudo apt install nodejs npm
+        npm config set prefix ~/.local/npm
+        npm i -g n
+        n lts
+        ;;
+esac
 
 curl -fsSL https://deno.land/install.sh | sh
 curl -fsSL https://bun.sh/install | bash
