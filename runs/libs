@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 
+if [ "$(uname -s)" = "Darwin" ]; then
+    # pbcopy replaces xclip; pavucontrol/shutter are Linux-only GUI tools
+    # gnupg is needed because .gitconfig sets commit.gpgsign = true
+    brew install ripgrep jq tldr fzf gh python@3.13 gnupg
+    "$(brew --prefix)/opt/fzf/install" --all --no-update-rc || true
+    exit 0
+fi
+
 sudo apt -y update
 sudo apt -y install git ripgrep pavucontrol xclip jq tldr shutter python3-pip
 

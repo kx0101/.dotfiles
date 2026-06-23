@@ -1,6 +1,19 @@
 #!/usr/bin/env bash
 
+case "$(uname -s)" in
+    Darwin)
+        ASSET="netcoredbg-osx-amd64.tar.gz"
+        # The macOS build is x64-only; ensure Rosetta on Apple Silicon
+        if [ "$(uname -m)" = "arm64" ]; then
+            softwareupdate --install-rosetta --agree-to-license || true
+        fi
+        ;;
+    *)
+        ASSET="netcoredbg-linux-amd64.tar.gz"
+        ;;
+esac
+
 mkdir -p "$HOME/.local/netcoredbg"
 cd "$HOME/.local/netcoredbg"
-wget https://github.com/Samsung/netcoredbg/releases/latest/download/netcoredbg-linux-amd64.tar.gz -O netcoredbg.tar.gz
+curl -fL "https://github.com/Samsung/netcoredbg/releases/latest/download/$ASSET" -o netcoredbg.tar.gz
 tar -xzf netcoredbg.tar.gz && rm netcoredbg.tar.gz

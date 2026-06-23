@@ -4,6 +4,13 @@ version="v0.12.0"
 
 echo "version: \"$version\""
 
+if [ "$(uname -s)" = "Darwin" ]; then
+    brew install neovim luarocks
+    luarocks install luasocket || true
+    luarocks install luacheck || true
+    exit 0
+fi
+
 if [ ! -d $HOME/neovim ]; then
     git clone https://github.com/neovim/neovim.git $HOME/neovim
 fi

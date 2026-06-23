@@ -4,7 +4,14 @@ version="1.25.0"
 
 echo "go version: $version"
 
-wget https://go.dev/dl/go$version.linux-amd64.tar.gz -O go.tar.gz
-sudo rm -rf /usr/local/go
-sudo tar -C /usr/local -xzf go.tar.gz
-rm go.tar.gz
+case "$(uname -s)" in
+    Darwin)
+        brew install go
+        ;;
+    *)
+        wget https://go.dev/dl/go$version.linux-amd64.tar.gz -O go.tar.gz
+        sudo rm -rf /usr/local/go
+        sudo tar -C /usr/local -xzf go.tar.gz
+        rm go.tar.gz
+        ;;
+esac

@@ -17,18 +17,29 @@ alias dotfiles="cd ~/personal/.dotfiles"
 
 # Environment Variables
 
-# Set up tool-specific roots
-export GOROOT="/usr/local/go"
+# Cross-platform tool roots and paths
 export GOPATH="$HOME/go"
-
-# Prepend development tool paths
-export PATH="$HOME/.cargo/bin:$HOME/.local/bin:/usr/local/bin/node:$GOROOT/bin:$GOPATH/bin:$PATH"
-export PATH=/opt/zig:$PATH
-export PATH="$PATH:/home/elijahkx/.dotnet/tools"
-export PATH="$HOME/vcpkg:$PATH"
 export VCPKG_ROOT="$HOME/vcpkg"
-export DOTNET_ROOT=$HOME/.dotnet
-export PATH=$HOME/.dotnet:$PATH
+export DOTNET_ROOT="$HOME/.dotnet"
 
-export http_proxy=http://192.168.1.6:808
-export https_proxy=http://192.168.1.6:808
+export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$HOME/.local/npm/bin:$GOPATH/bin:$PATH"
+export PATH="$HOME/vcpkg:$PATH"
+export PATH="$HOME/.dotnet:$HOME/.dotnet/tools:$PATH"
+
+case "$(uname -s)" in
+    Darwin)
+        # Homebrew (Apple Silicon) puts go/node/zig and friends on PATH
+        if [ -x /opt/homebrew/bin/brew ]; then
+            eval "$(/opt/homebrew/bin/brew shellenv)"
+        fi
+        ;;
+    *)
+        # Linux
+        export GOROOT="/usr/local/go"
+        export PATH="$GOROOT/bin:/usr/local/bin/node:/opt/zig:$PATH"
+
+        # Home/work network proxy (Linux box only)
+        export http_proxy=http://192.168.1.6:808
+        export https_proxy=http://192.168.1.6:808
+        ;;
+esac

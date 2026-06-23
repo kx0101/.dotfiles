@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 
-sudo apt install -y zsh
-hash -r
-sudo chsh -s $(which zsh)
+case "$(uname -s)" in
+    Darwin)
+        # macOS already ships zsh as the default login shell
+        ;;
+    *)
+        sudo apt install -y zsh
+        hash -r
+        sudo chsh -s $(which zsh)
+        ;;
+esac
+
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"

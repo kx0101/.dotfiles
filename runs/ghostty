@@ -2,6 +2,11 @@
 
 set -e
 
+if [ "$(uname -s)" = "Darwin" ]; then
+    brew install --cask ghostty
+    exit 0
+fi
+
 ZIG_VERSION="0.13.0"
 GHOSTTY_REPO="https://github.com/mitchellh/ghostty.git"
 

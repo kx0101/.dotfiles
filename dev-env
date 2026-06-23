@@ -60,8 +60,14 @@ execute mkdir -p $HOME/.config/nvim
 copy_dir nvim $HOME/.config/nvim
 copy_file nvim/init.lua $HOME/.config/nvim
 
+execute mkdir -p $HOME/.config/ghostty
 copy_file config $HOME/.config/ghostty
 copy_file .tmux.conf $HOME
 copy_file .ideavimrc $HOME
 copy_file .zshrc $HOME
 copy_file dev-env $HOME/.local/bin
+
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    execute mkdir -p $HOME/.hammerspoon
+    copy_file hammerspoon/init.lua $HOME/.hammerspoon
+fi

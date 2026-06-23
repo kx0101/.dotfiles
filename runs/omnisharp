@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 
+case "$(uname -s)" in
+    Darwin) ASSET="omnisharp-osx-arm64-net6.0.tar.gz" ;;
+    *) ASSET="omnisharp-linux-x64-net6.0.tar.gz" ;;
+esac
+
 mkdir -p ~/.omnisharp
 
 cd ~/.omnisharp
-curl -L https://github.com/OmniSharp/omnisharp-roslyn/releases/latest/download/omnisharp-linux-x64-net6.0.tar.gz -o omnisharp.tar.gz
+curl -L https://github.com/OmniSharp/omnisharp-roslyn/releases/latest/download/$ASSET -o omnisharp.tar.gz
 
 tar -xzf omnisharp.tar.gz
 rm omnisharp.tar.gz
