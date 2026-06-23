@@ -31,8 +31,25 @@ if [ "${REDUCE_MOTION:-1}" = "1" ]; then
     defaults write com.apple.universalaccess reduceMotion -bool true
 fi
 
-killall Dock 2>/dev/null || true
+# --- Keyboard: essential for vim/nvim ---
+# Disable the press-and-hold accent popup so holding a key repeats it (hjkl)
+defaults write -g ApplePressAndHoldEnabled -bool false
+# Fast key repeat + short initial delay (2/15 are the fastest the System
+# Settings sliders expose)
+defaults write -g KeyRepeat -int 2
+defaults write -g InitialKeyRepeat -int 15
 
-echo "macOS animation tweaks applied."
-echo "Reduce Motion may need a logout/login to fully apply; if it doesn't stick,"
-echo "toggle it in System Settings > Accessibility > Display > Reduce Motion."
+# --- Finder quality-of-life (Linux-friendly) ---
+defaults write -g AppleShowAllExtensions -bool true
+defaults write com.apple.finder AppleShowAllFiles -bool true
+defaults write com.apple.finder ShowPathbar -bool true
+defaults write com.apple.finder ShowStatusBar -bool true
+# Search the current folder by default rather than the whole Mac
+defaults write com.apple.finder FXDefaultSearchScope -string "SCcf"
+
+killall Dock 2>/dev/null || true
+killall Finder 2>/dev/null || true
+
+echo "macOS tweaks applied (animations, keyboard repeat, Finder)."
+echo "Key repeat + Reduce Motion may need a logout/login to fully apply."
+echo "If Reduce Motion doesn't stick: System Settings > Accessibility > Display."

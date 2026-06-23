@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# GUI apps via Homebrew casks. No-op on Linux.
+# The ⌥ shortcuts in hammerspoon/init.lua expect these to exist.
+
+[ "$(uname -s)" = "Darwin" ] || exit 0
+
+apps=(
+    google-chrome   # ⌥Q  browser
+    slack           # ⌥E
+    discord         # ⌥R
+    spotify         # ⌥F
+    alt-tab         # Windows/Linux-style Alt-Tab: switch WINDOWS with previews
+)
+
+for a in "${apps[@]}"; do
+    brew install --cask "$a" || echo "  (skipped $a)"
+done
+
+echo "GUI apps installed. (Ghostty terminal comes from runs/ghostty.)"
+echo "Tip: AltTab's default trigger is ⌥Tab — change it in its settings if you like."

@@ -11,6 +11,10 @@ font-family = "Adwaita Sans"
 
 keybind = ctrl+shift+f=toggle_fullscreen
 
+# macOS: send Alt/Meta from the Option key so terminal Alt-keybindings work
+# (this key is ignored on Linux)
+macos-option-as-alt = true
+
 # Black
 palette = 0=#26233a
 # Red
