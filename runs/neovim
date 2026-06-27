@@ -5,7 +5,7 @@ version="v0.12.0"
 echo "version: \"$version\""
 
 if [ "$(uname -s)" = "Darwin" ]; then
-    brew install neovim luarocks
+    brew install neovim luarocks tree-sitter-cli
     luarocks install luasocket || true
     luarocks install luacheck || true
     exit 0
@@ -30,3 +30,7 @@ cd luarocks-3.11.1
 ./configure && make && sudo make install
 sudo luarocks install luasocket
 luarocks install luacheck
+
+# tree-sitter CLI: required by nvim-treesitter (main branch) to build parsers
+[ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
+cargo install tree-sitter-cli
