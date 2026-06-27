@@ -24,9 +24,13 @@ case "$(uname -s)" in
         fi
         ;;
     *)
-        # Linux / macOS
-        wget https://dot.net/v1/dotnet-install.sh -O dotnet-install.sh
-        chmod +x ./dotnet-install.sh
-        ./dotnet-install.sh --channel $version
+        # Linux / macOS. macOS ships curl (not wget), so use curl. Download the
+        # installer to a temp dir and install into $HOME/.dotnet (matches
+        # DOTNET_ROOT in .zshrc).
+        installer="$(mktemp -t dotnet-install.XXXXXX.sh)"
+        curl -fsSL https://dot.net/v1/dotnet-install.sh -o "$installer"
+        chmod +x "$installer"
+        "$installer" --channel "$version" --install-dir "$HOME/.dotnet"
+        rm -f "$installer"
         ;;
 esac

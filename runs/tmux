@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+# tmux terminal multiplexer. The .tmux.conf is synced separately by ./dev-env.
+case "$(uname -s)" in
+    Darwin) brew install tmux ;;
+    *) sudo apt install -y tmux ;;
+esac

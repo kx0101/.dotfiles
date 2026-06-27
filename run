@@ -32,10 +32,31 @@ execute() {
     "$@"
 }
 
+ensure_brew() {
+    [ "$(uname -s)" = "Darwin" ] || return 0
+
+    if ! command -v brew > /dev/null 2>&1; then
+        log "Installing Homebrew..."
+        if [[ $dry != "1" ]]; then
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        fi
+    fi
+
+    if [ -x /opt/homebrew/bin/brew ]; then
+        eval "$(/opt/homebrew/bin/brew shellenv)"
+    elif [ -x /usr/local/bin/brew ]; then
+        eval "$(/usr/local/bin/brew shellenv)"
+    fi
+}
+
 log "$script_dir -- $filter"
 
 cd $script_dir
-scripts=$(find ./runs -maxdepth 1 -mindepth 1 -executable -type f)
+
+# brew before everything: most runs/* scripts call `brew install` on macOS.
+ensure_brew
+
+scripts=$(find ./runs -maxdepth 1 -mindepth 1 -type f -perm -u+x)
 
 for script in $scripts; do
     if echo "$script" | grep -qv "$filter"; then
