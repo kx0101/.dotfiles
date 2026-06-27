@@ -70,4 +70,7 @@ copy_file dev-env $HOME/.local/bin
 if [[ "$(uname -s)" == "Darwin" ]]; then
     execute mkdir -p $HOME/.hammerspoon
     copy_file hammerspoon/init.lua $HOME/.hammerspoon
+
+    execute mkdir -p $HOME/Library/KeyBindings
+    copy_file DefaultKeyBinding.dict $HOME/Library/KeyBindings
 fi
