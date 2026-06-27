@@ -7,7 +7,8 @@ if vim.fn.has("win32") == 1 then
     vim.opt.shellquote = ""
     vim.opt.shellxquote = ""
 else
-    vim.opt.shell = "/usr/bin/zsh"
+    local zsh = vim.fn.exepath("zsh")
+    vim.opt.shell = zsh ~= "" and zsh or "/bin/zsh"
     vim.opt.shellcmdflag = "-c"
     vim.opt.shellquote = ""
     vim.opt.shellxquote = ""
