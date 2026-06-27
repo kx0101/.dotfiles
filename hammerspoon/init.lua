@@ -37,4 +37,7 @@ local function reloadConfig(files)
 end
 
 hs.pathwatcher.new(os.getenv("HOME") .. "/.hammerspoon/", reloadConfig):start()
+-- Launch at login so the ⌥ shortcuts are always available after a reboot.
+hs.autoLaunch(true)
+
 hs.alert.show("Hammerspoon config loaded")
