@@ -5,9 +5,12 @@
 [ "$(uname -s)" = "Darwin" ] || exit 0
 
 apps=(
-    google-chrome   # ⌥Q  browser
-    slack           # ⌥E
+    hammerspoon     # global ⌥ launch/focus shortcuts engine (config: hammerspoon/init.lua)
+    brave-browser   # ⌥Q  browser
     discord         # ⌥R
+    viber           # ⌥A
+    whatsapp        # ⌥V
+    obsidian        # ⌥Z
     spotify         # ⌥F
     alt-tab         # Windows/Linux-style Alt-Tab: switch WINDOWS with previews
 )

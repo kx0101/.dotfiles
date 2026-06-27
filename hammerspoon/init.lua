@@ -7,10 +7,12 @@ local mod = { "alt" }
 
 -- Edit the values to match the app names as they appear in /Applications.
 local apps = {
-    q = "Google Chrome", -- ⌥Q  browser
+    q = "Brave Browser", -- ⌥Q  browser
     w = "Ghostty",       -- ⌥W  terminal
-    e = "Slack",         -- ⌥E  Slack
     r = "Discord",       -- ⌥R  Discord
+    a = "Viber",         -- ⌥A  Viber
+    v = "WhatsApp",      -- ⌥V  WhatsApp
+    z = "Obsidian",      -- ⌥Z  Obsidian
     f = "Spotify",       -- ⌥F  Spotify
 }
 
