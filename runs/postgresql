@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+# PostgreSQL 16 for local development. Projects (fitcoach, bookit, ...) expect a
+# server on localhost:5432. This installs + starts the server; per-project roles
+# and databases are created by each project, not here.
+version="16"
+
+case "$(uname -s)" in
+    Darwin)
+        brew install "postgresql@${version}"
+        # keg-only: expose psql/pg_ctl on PATH (also wired into .zshrc)
+        brew services start "postgresql@${version}"
+        echo "postgresql@${version} started on :5432"
+        echo "binaries: $(brew --prefix)/opt/postgresql@${version}/bin"
+        ;;
+    *)
+        sudo apt -y update
+        sudo apt -y install postgresql postgresql-contrib
+        sudo systemctl enable --now postgresql
+        ;;
+esac

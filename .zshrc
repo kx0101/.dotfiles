@@ -32,6 +32,10 @@ case "$(uname -s)" in
         if [ -x /opt/homebrew/bin/brew ]; then
             eval "$(/opt/homebrew/bin/brew shellenv)"
         fi
+        # postgresql@16 is keg-only; put psql/pg_ctl on PATH when present
+        if [ -d /opt/homebrew/opt/postgresql@16/bin ]; then
+            export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"
+        fi
         ;;
     *)
         # Linux
