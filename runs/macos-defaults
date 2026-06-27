@@ -28,7 +28,12 @@ defaults write com.apple.dock autohide-delay -float 0
 # Turns the cross-Space SLIDE into an instant cross-fade. It is global (affects
 # all system animations). Disable with: REDUCE_MOTION=0 ./runs/macos-defaults
 if [ "${REDUCE_MOTION:-1}" = "1" ]; then
-    defaults write com.apple.universalaccess reduceMotion -bool true
+    # com.apple.universalaccess is a protected domain on modern macOS, so this
+    # write can fail. Don't let `set -e` abort the rest of the tweaks; just hint.
+    if ! defaults write com.apple.universalaccess reduceMotion -bool true 2>/dev/null; then
+        echo "  (Reduce Motion is protected: enable it manually in"
+        echo "   System Settings > Accessibility > Display > Reduce Motion)"
+    fi
 fi
 
 # --- Keyboard: essential for vim/nvim ---
