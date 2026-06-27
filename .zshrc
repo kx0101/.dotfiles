@@ -15,6 +15,10 @@ alias tmux-sessionizer="~/personal/.dotfiles/scripts/tmux-sessionizer"
 alias luamake='~/lua-language-server/3rd/luamake/luamake'
 alias dotfiles="cd ~/personal/.dotfiles"
 
+# Key bindings
+# Ctrl+W deletes the previous word (word-by-word)
+bindkey '^W' backward-kill-word
+
 # Environment Variables
 
 # Cross-platform tool roots and paths
