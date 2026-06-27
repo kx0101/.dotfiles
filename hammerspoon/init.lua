@@ -2,6 +2,9 @@
 -- Global launch-or-focus shortcuts, ported from the Windows AutoHotkey setup
 -- (shortcuts.ahk). On macOS, Alt is the Option (⌥) key.
 
+-- Load the IPC module so the `hs` CLI can drive this config: hs -c "...".
+require("hs.ipc")
+
 -- ⌥ Option is the macOS analog of Alt on Windows/Linux.
 local mod = { "alt" }
 
@@ -39,5 +42,27 @@ end
 hs.pathwatcher.new(os.getenv("HOME") .. "/.hammerspoon/", reloadConfig):start()
 -- Launch at login so the ⌥ shortcuts are always available after a reboot.
 hs.autoLaunch(true)
+
+-- Ctrl+W = delete the previous word everywhere EXCEPT the terminal.
+-- Chromium browsers ignore ~/Library/KeyBindings and macOS has no global
+-- Ctrl+W word-delete, so translate it to Option+Delete (the native
+-- delete-word). Ghostty is excluded so zsh's ^W and nvim's Ctrl+W window
+-- prefix keep working there.
+ctrlWTap = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, function(e)
+    local app = hs.application.frontmostApplication()
+    if app and app:bundleID() == "com.mitchellh.ghostty" then
+        return false
+    end
+
+    local f = e:getFlags()
+    -- keyCode 13 = "w", 51 = delete (backspace)
+    if e:getKeyCode() == 13 and f.ctrl and not f.cmd and not f.alt and not f.shift and not f.fn then
+        hs.eventtap.keyStroke({ "alt" }, "delete", 0)
+        return true
+    end
+
+    return false
+end)
+ctrlWTap:start()
 
 hs.alert.show("Hammerspoon config loaded")
