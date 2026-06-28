@@ -11,6 +11,94 @@ font-family = "Adwaita Sans"
 
 keybind = ctrl+shift+f=toggle_fullscreen
 
+# Window switching -> send a private CSI sequence (ESC[9N~) that tmux maps to
+# select-window N. We bind BOTH cmd+N and ctrl+N (and both trigger forms,
+# physical digit_N and codepoint N) on purpose. The Kinesis swaps Ctrl<->Cmd at
+# the HID level (hidutil), and that swap IS seen by Ghostty, so inside Ghostty:
+#   - Left Ctrl reads as Command  -> caught by cmd+N
+#   - Windows key reads as Control -> caught by ctrl+N
+# Binding both means either key switches windows. cmd+N also has to beat
+# Ghostty's default super+digit_N=goto_tab:N.
+keybind = cmd+digit_1=csi:91~
+keybind = cmd+1=csi:91~
+keybind = cmd+digit_2=csi:92~
+keybind = cmd+2=csi:92~
+keybind = cmd+digit_3=csi:93~
+keybind = cmd+3=csi:93~
+keybind = cmd+digit_4=csi:94~
+keybind = cmd+4=csi:94~
+keybind = cmd+digit_5=csi:95~
+keybind = cmd+5=csi:95~
+keybind = cmd+digit_6=csi:96~
+keybind = cmd+6=csi:96~
+keybind = cmd+digit_7=csi:97~
+keybind = cmd+7=csi:97~
+keybind = cmd+digit_8=csi:98~
+keybind = cmd+8=csi:98~
+keybind = cmd+digit_9=csi:99~
+keybind = cmd+9=csi:99~
+
+keybind = ctrl+digit_1=csi:91~
+keybind = ctrl+1=csi:91~
+keybind = ctrl+digit_2=csi:92~
+keybind = ctrl+2=csi:92~
+keybind = ctrl+digit_3=csi:93~
+keybind = ctrl+3=csi:93~
+keybind = ctrl+digit_4=csi:94~
+keybind = ctrl+4=csi:94~
+keybind = ctrl+digit_5=csi:95~
+keybind = ctrl+5=csi:95~
+keybind = ctrl+digit_6=csi:96~
+keybind = ctrl+6=csi:96~
+keybind = ctrl+digit_7=csi:97~
+keybind = ctrl+7=csi:97~
+keybind = ctrl+digit_8=csi:98~
+keybind = ctrl+8=csi:98~
+keybind = ctrl+digit_9=csi:99~
+keybind = ctrl+9=csi:99~
+
+# Make Left Ctrl behave EXACTLY like Control inside Ghostty.
+# After the Kinesis HID swap (hidutil), inside Ghostty:
+#   - Left Ctrl reads as Command (cmd+*)
+#   - Windows key reads as Control (ctrl+*, already a real terminal Ctrl)
+# The user wants both keys identical here (harpoon <C-q/w/e/f>, window nav
+# <C-h/j/k/l>, clear <C-l>, tmux leader <C-a>, cancel <C-c>, etc). So map every
+# cmd+<letter> to the matching control byte (Ctrl-A=0x01 .. Ctrl-Z=0x1a). This
+# overrides Ghostty's own Cmd shortcuts (copy/paste/new-tab/close/quit), which is
+# fine since we live in tmux+nvim. GUI copy/paste/quit stay on cmd+shift+* below.
+keybind = cmd+a=text:\x01
+keybind = cmd+b=text:\x02
+keybind = cmd+c=text:\x03
+keybind = cmd+d=text:\x04
+keybind = cmd+e=text:\x05
+keybind = cmd+f=text:\x06
+keybind = cmd+g=text:\x07
+keybind = cmd+h=text:\x08
+keybind = cmd+i=text:\x09
+keybind = cmd+j=text:\x0a
+keybind = cmd+k=text:\x0b
+keybind = cmd+l=text:\x0c
+keybind = cmd+m=text:\x0d
+keybind = cmd+n=text:\x0e
+keybind = cmd+o=text:\x0f
+keybind = cmd+p=text:\x10
+keybind = cmd+q=text:\x11
+keybind = cmd+r=text:\x12
+keybind = cmd+s=text:\x13
+keybind = cmd+t=text:\x14
+keybind = cmd+u=text:\x15
+keybind = cmd+v=text:\x16
+keybind = cmd+w=text:\x17
+keybind = cmd+x=text:\x18
+keybind = cmd+y=text:\x19
+keybind = cmd+z=text:\x1a
+
+# GUI fallbacks (Left Ctrl + Shift): keep real copy / paste / quit reachable
+# since plain cmd+c/v/q now send control bytes.
+keybind = cmd+shift+c=copy_to_clipboard
+keybind = cmd+shift+v=paste_from_clipboard
+keybind = cmd+shift+q=quit
+
 # macOS: send Alt/Meta from the Option key so terminal Alt-keybindings work
 # (this key is ignored on Linux)
 macos-option-as-alt = true

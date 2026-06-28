@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Kinesis Advantage 360 Pro: swap Ctrl <-> Command at the HID level via hidutil.
+#
+# Why not System Settings > Keyboard > Modifier Keys? Ghostty (and kitty,
+# Alacritty) read keys below that layer, so a System Settings modifier remap is
+# ignored inside the terminal. hidutil remaps at the HID driver level, so the
+# swap is honored everywhere, terminals included. We therefore drop the old
+# per-device System Settings remap (so it does not double-remap and cancel out
+# in normal apps) and let a LaunchAgent apply the hidutil swap at login.
+#
+# Result (Kinesis only; the MacBook keyboard is untouched):
+#   Left Ctrl  -> Command       Left Cmd / Win -> Control
+#   Right Ctrl -> Command       Right Cmd      -> Control
+
+[ "$(uname -s)" = "Darwin" ] || exit 0
+set -e
+
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+label="com.kx0101.kinesis-ctrl-cmd-swap"
+plist="$HOME/Library/LaunchAgents/$label.plist"
+
+# Drop the old System Settings per-device modifier remap if present
+# (vendor 10730 = 0x29EA, product 866 = 0x362). Harmless if it is not set.
+# Takes effect on next login (or keyboard replug).
+defaults -currentHost delete -g com.apple.keyboard.modifiermapping.10730-866-0 2>/dev/null || true
+
+mkdir -p "$HOME/Library/LaunchAgents"
+cp "$repo/macos/$label.plist" "$plist"
+
+launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+launchctl bootstrap "gui/$(id -u)" "$plist"
+
+ghostty_bid="com.mitchellh.ghostty"
+
+# The Kinesis swap makes Left Ctrl read as Command in Ghostty. macOS menu
+# shortcuts (Quit, Close Window, Copy, Clear Screen, etc.) can consume Cmd+letter
+# before Ghostty keybinds send terminal Ctrl bytes. Move those menu shortcuts off
+# plain Cmd+letters so Left Ctrl + q/w/e/r/l/c behaves like terminal Control.
+defaults write "$ghostty_bid" NSUserKeyEquivalents -dict \
+  "Quit Ghostty" '@$q' \
+  "Close" '@~^$w' \
+  "Close Window" '@~^$w' \
+  "Close Tab" '@~^$x' \
+  "New Window" '@~^$n' \
+  "New Tab" '@~^$t' \
+  "Copy" '@$c' \
+  "Paste" '@$v' \
+  "Select All" '@~^$a' \
+  "Find" '@~^$f' \
+  "Find..." '@~^$f' \
+  "Use Selection for Find" '@~^$e' \
+  "Hide Ghostty" '@~^$h' \
+  "Hide" '@~^$h' \
+  "Reload Configuration" '@$,' \
+  "Open Configuration" '@~$,' \
+  "Clear Screen" '@~^$l' \
+  "Clear Scrollback" '@~^$k'
+
+echo "Kinesis Ctrl<->Cmd HID swap installed and loaded ($label)."
+echo "Ghostty menu shortcuts moved off plain Cmd+letters."
+echo "Restart Ghostty after changing menu shortcuts."

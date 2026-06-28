@@ -70,4 +70,9 @@ copy_file dev-env $HOME/.local/bin
 if [[ "$(uname -s)" == "Darwin" ]]; then
     execute mkdir -p $HOME/.hammerspoon
     copy_file hammerspoon/init.lua $HOME/.hammerspoon
+
+    # Ghostty.app on macOS reads this Application Support path. Keep it pointed
+    # at the same config that `ghostty +show-config` reads from ~/.config.
+    execute mkdir -p "$HOME/Library/Application Support/com.mitchellh.ghostty"
+    execute ln -sfn "$HOME/.config/ghostty/config" "$HOME/Library/Application Support/com.mitchellh.ghostty/config.ghostty"
 fi
