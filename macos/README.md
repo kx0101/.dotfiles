@@ -34,6 +34,3 @@ with hidutil in normal apps) and (re)loads the LaunchAgent.
     launchctl bootout gui/$(id -u)/com.kx0101.kinesis-ctrl-cmd-swap
     rm ~/Library/LaunchAgents/com.kx0101.kinesis-ctrl-cmd-swap.plist
     hidutil property --matching '{"VendorID":0x29EA,"ProductID":0x362}' --set '{"UserKeyMapping":[]}'
-
-`kinesis-systemsettings-modmap.backup.txt` holds the old System Settings
-per-device remap that this replaces, in case you want it back.
