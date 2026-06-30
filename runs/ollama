@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -e
 
-# Local coding model for Ollama. qwen2.5-coder:32b (~20GB, Q4_K_M) is one of the
-# strongest local coding models and fits comfortably in 48GB unified memory.
+# Local coding model for Ollama. qwen3-coder:30b (~18GB) is a strong local
+# coding/agent model and supports Goose tool calls properly.
 # Override with: OLLAMA_MODEL=<name> ./runs/ollama
 # Other good options:
-#   qwen2.5-coder:14b / :7b   (smaller, faster)
-#   qwen3-coder:30b           (newer MoE, very fast)
+#   llama3.1:8b               (smaller, faster, useful for tool tests)
+#   qwen2.5-coder:14b / :7b   (smaller coding models)
 #   deepseek-coder-v2:16b
-MODEL="${OLLAMA_MODEL:-qwen2.5-coder:32b}"
+MODEL="${OLLAMA_MODEL:-qwen3-coder:30b}"
 
 case "$(uname -s)" in
     Darwin)

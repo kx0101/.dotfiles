@@ -21,6 +21,12 @@ bindkey '^W' backward-kill-word
 
 # Environment Variables
 
+export GOOSE_PROVIDER="ollama"
+export GOOSE_MODEL="qwen3-coder:30b"
+export GOOSE_TELEMETRY_ENABLED="false"
+export GOOSE_CLI_THEME="dark"
+export GOOSE_MOIM_MESSAGE_TEXT="For normal chat responses, use plain text only. Never use Markdown formatting. Do not use headings, bullets, numbered lists, bold text, tables, or fenced code blocks unless I explicitly ask for Markdown or source code requires it. Do not start response lines with #, -, *, or numbered-list markers. Prefer short plain paragraphs."
+
 # Cross-platform tool roots and paths
 export GOPATH="$HOME/go"
 export VCPKG_ROOT="$HOME/vcpkg"
