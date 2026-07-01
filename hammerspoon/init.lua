@@ -65,4 +65,51 @@ ctrlWTap = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, function(e)
 end)
 ctrlWTap:start()
 
+-- Option+Shift = toggle input source (ABC <-> Greek), like Windows Alt+Shift.
+-- macOS can't bind a modifier-only shortcut natively, so we watch flag changes:
+-- arm when ONLY alt+shift are held, and fire once on release, unless another
+-- key/modifier was pressed in between (that means it was a real shortcut).
+local function toggleInputSource()
+    if hs.keycodes.currentLayout() == "Greek" then
+        hs.keycodes.setLayout("ABC")
+    else
+        hs.keycodes.setLayout("Greek")
+    end
+end
+
+local langArmed = false
+local langOtherKey = false
+
+langFlagTap = hs.eventtap.new({ hs.eventtap.event.types.flagsChanged }, function(e)
+    local f = e:getFlags()
+    local pureAltShift = f.alt and f.shift and not f.cmd and not f.ctrl and not f.fn
+    if pureAltShift then
+        langArmed = true
+        langOtherKey = false
+    elseif langArmed then
+        if f.cmd or f.ctrl or f.fn then
+            -- a disqualifying modifier was added: not a plain Option+Shift tap
+            langOtherKey = true
+            langArmed = false
+        else
+            -- alt and/or shift released: perform the toggle once
+            if not langOtherKey then
+                toggleInputSource()
+            end
+            langArmed = false
+        end
+    end
+    return false
+end)
+
+langKeyTap = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, function(e)
+    if langArmed then
+        langOtherKey = true
+    end
+    return false
+end)
+
+langFlagTap:start()
+langKeyTap:start()
+
 hs.alert.show("Hammerspoon config loaded")
