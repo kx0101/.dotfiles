@@ -41,8 +41,8 @@ end)
 vim.keymap.set("n", "<leader>pw", "<cmd>vsplit<CR>")
 vim.keymap.set("n", "<leader>pe", "<cmd>split<CR>")
 
-vim.api.nvim_del_keymap('n', '<C-w>d')
-vim.api.nvim_del_keymap('n', '<C-w><C-D>')
+pcall(vim.api.nvim_del_keymap, 'n', '<C-w>d')
+pcall(vim.api.nvim_del_keymap, 'n', '<C-w><C-D>')
 
 vim.keymap.set("n", "<C-h>", "<C-w>h")
 vim.keymap.set("n", "<C-j>", "<C-w>j")
