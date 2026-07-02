@@ -46,45 +46,40 @@ hs.autoLaunch(true)
 -- Ctrl+W = delete the previous word everywhere EXCEPT the terminal.
 -- Chromium browsers ignore ~/Library/KeyBindings and macOS has no global
 -- Ctrl+W word-delete, so translate it to Option+Delete (the native
--- delete-word). Ghostty is excluded so zsh's ^W and nvim's Ctrl+W window
--- prefix keep working there.
--- This relies on the focused field honoring Option+Backspace, which native
--- fields, browser inputs and browser rich-text editors (incl. Messenger/
--- Instagram's Lexical in Brave) all do.
+-- delete-word), which native fields, browser inputs and browser rich-text
+-- editors (incl. Messenger/Instagram's Lexical in Brave) all honor.
 --
--- The keyDown callback must stay fast: a slow callback makes macOS disable
--- the tap (kCGEventTapDisabledByTimeout), after which it silently stops
--- working. So instead of calling hs.application.frontmostApplication() on
--- every keypress, we cache whether Ghostty is focused via an app watcher.
+-- IMPORTANT: this is a Carbon hotkey (hs.hotkey), NOT an event tap. Event
+-- taps get silently disabled by macOS (kCGEventTapDisabledByTimeout) with
+-- isEnabled() still reporting true, so they stop working and no watchdog
+-- reliably catches them. Carbon hotkeys stay registered and never suffer
+-- this. We disable the hotkey while Ghostty is focused so zsh's ^W and
+-- nvim's Ctrl+W window prefix keep working there, and enable it elsewhere.
 local GHOSTTY_BID = "com.mitchellh.ghostty"
-local function isGhosttyFront()
-    local app = hs.application.frontmostApplication()
-    return app ~= nil and app:bundleID() == GHOSTTY_BID
+
+local function deleteWordBackward()
+    hs.eventtap.keyStroke({ "alt" }, "delete", 0)
 end
-local ghosttyFocused = isGhosttyFront()
+
+-- pressedfn + repeatfn so holding Ctrl+W keeps deleting words; no releasedfn.
+ctrlWHotkey = hs.hotkey.new({ "ctrl" }, "w", deleteWordBackward, nil, deleteWordBackward)
+
+local function syncCtrlWForApp(app)
+    local front = app or hs.application.frontmostApplication()
+    if front and front:bundleID() == GHOSTTY_BID then
+        ctrlWHotkey:disable()
+    else
+        ctrlWHotkey:enable()
+    end
+end
+syncCtrlWForApp(hs.application.frontmostApplication())
 
 ghosttyFocusWatcher = hs.application.watcher.new(function(_, event, app)
     if event == hs.application.watcher.activated then
-        ghosttyFocused = (app ~= nil and app:bundleID() == GHOSTTY_BID)
+        syncCtrlWForApp(app)
     end
 end)
 ghosttyFocusWatcher:start()
-
-ctrlWTap = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, function(e)
-    if ghosttyFocused then
-        return false
-    end
-
-    local f = e:getFlags()
-    -- keyCode 13 = "w", 51 = delete (backspace)
-    if e:getKeyCode() == 13 and f.ctrl and not f.cmd and not f.alt and not f.shift and not f.fn then
-        hs.eventtap.keyStroke({ "alt" }, "delete", 0)
-        return true
-    end
-
-    return false
-end)
-ctrlWTap:start()
 
 -- Option+Shift = toggle input source (ABC <-> Greek), like Windows Alt+Shift.
 -- macOS can't bind a modifier-only shortcut natively, so we watch flag changes:
@@ -133,12 +128,16 @@ end)
 langFlagTap:start()
 langKeyTap:start()
 
--- macOS can silently disable an event tap (e.g. kCGEventTapDisabledByTimeout).
--- Re-arm any that got turned off so Ctrl+W word-delete and the Option+Shift
--- language toggle keep working without needing a manual reload.
+-- The language toggle must use event taps (a modifier-only chord can't be a
+-- Carbon hotkey). macOS can silently disable an event tap
+-- (kCGEventTapDisabledByTimeout) while isEnabled() still reports true, so an
+-- isEnabled() check is not enough. Force-restart these taps periodically to
+-- guarantee they keep firing. Their callbacks are trivial, so a missed event
+-- during the sub-millisecond restart is harmless.
 eventTapWatchdog = hs.timer.doEvery(5, function()
-    for _, tap in ipairs({ ctrlWTap, langFlagTap, langKeyTap }) do
-        if tap and not tap:isEnabled() then
+    for _, tap in ipairs({ langFlagTap, langKeyTap }) do
+        if tap then
+            tap:stop()
             tap:start()
         end
     end
