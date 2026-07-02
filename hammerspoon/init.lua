@@ -48,6 +48,10 @@ hs.autoLaunch(true)
 -- Ctrl+W word-delete, so translate it to Option+Delete (the native
 -- delete-word). Ghostty is excluded so zsh's ^W and nvim's Ctrl+W window
 -- prefix keep working there.
+-- This relies on the focused field honoring Option+Backspace, which native
+-- fields, browser inputs and browser rich-text editors (incl. Messenger/
+-- Instagram's Lexical in Brave) all do. If it ever stops working in an app,
+-- the event tap was likely disabled by macOS; :reload() re-arms it.
 ctrlWTap = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, function(e)
     local app = hs.application.frontmostApplication()
     if app and app:bundleID() == "com.mitchellh.ghostty" then
@@ -111,5 +115,16 @@ end)
 
 langFlagTap:start()
 langKeyTap:start()
+
+-- macOS can silently disable an event tap (e.g. kCGEventTapDisabledByTimeout).
+-- Re-arm any that got turned off so Ctrl+W word-delete and the Option+Shift
+-- language toggle keep working without needing a manual reload.
+eventTapWatchdog = hs.timer.doEvery(5, function()
+    for _, tap in ipairs({ ctrlWTap, langFlagTap, langKeyTap }) do
+        if tap and not tap:isEnabled() then
+            tap:start()
+        end
+    end
+end)
 
 hs.alert.show("Hammerspoon config loaded")
