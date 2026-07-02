@@ -57,8 +57,22 @@ hs.autoLaunch(true)
 -- nvim's Ctrl+W window prefix keep working there, and enable it elsewhere.
 local GHOSTTY_BID = "com.mitchellh.ghostty"
 
+-- Send Option+Delete as an explicit hold: Option down, Delete down+up with the
+-- Option flag, Option up, with small gaps. A plain keyStroke with no delay gets
+-- interpreted as a single-char delete by contenteditable editors (Messenger's
+-- Lexical, Claude's ProseMirror); actually holding Option makes them honor the
+-- word-delete. Plain fields, the address bar, Obsidian and Discord work either
+-- way.
 local function deleteWordBackward()
-    hs.eventtap.keyStroke({ "alt" }, "delete", 0)
+    local alt = hs.keycodes.map.alt
+    local del = hs.keycodes.map.delete
+    hs.eventtap.event.newKeyEvent({}, alt, true):post()
+    hs.timer.usleep(12000)
+    hs.eventtap.event.newKeyEvent({ alt = true }, del, true):post()
+    hs.timer.usleep(12000)
+    hs.eventtap.event.newKeyEvent({ alt = true }, del, false):post()
+    hs.timer.usleep(12000)
+    hs.eventtap.event.newKeyEvent({}, alt, false):post()
 end
 
 -- pressedfn + repeatfn so holding Ctrl+W keeps deleting words; no releasedfn.
