@@ -50,11 +50,28 @@ hs.autoLaunch(true)
 -- prefix keep working there.
 -- This relies on the focused field honoring Option+Backspace, which native
 -- fields, browser inputs and browser rich-text editors (incl. Messenger/
--- Instagram's Lexical in Brave) all do. If it ever stops working in an app,
--- the event tap was likely disabled by macOS; :reload() re-arms it.
-ctrlWTap = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, function(e)
+-- Instagram's Lexical in Brave) all do.
+--
+-- The keyDown callback must stay fast: a slow callback makes macOS disable
+-- the tap (kCGEventTapDisabledByTimeout), after which it silently stops
+-- working. So instead of calling hs.application.frontmostApplication() on
+-- every keypress, we cache whether Ghostty is focused via an app watcher.
+local GHOSTTY_BID = "com.mitchellh.ghostty"
+local function isGhosttyFront()
     local app = hs.application.frontmostApplication()
-    if app and app:bundleID() == "com.mitchellh.ghostty" then
+    return app ~= nil and app:bundleID() == GHOSTTY_BID
+end
+local ghosttyFocused = isGhosttyFront()
+
+ghosttyFocusWatcher = hs.application.watcher.new(function(_, event, app)
+    if event == hs.application.watcher.activated then
+        ghosttyFocused = (app ~= nil and app:bundleID() == GHOSTTY_BID)
+    end
+end)
+ghosttyFocusWatcher:start()
+
+ctrlWTap = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, function(e)
+    if ghosttyFocused then
         return false
     end
 
