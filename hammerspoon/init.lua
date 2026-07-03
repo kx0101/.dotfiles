@@ -122,6 +122,21 @@ wakeWatcher = hs.caffeinate.watcher.new(function(event)
 end)
 wakeWatcher:start()
 
+-- The Kinesis also loses its hidutil swap when unplugged/replugged (a fresh USB
+-- enumeration, with no sleep event firing). Re-apply on device attach. The
+-- delayed retries let macOS finish creating the HID service before hidutil runs.
+kinesisUsbWatcher = hs.usb.watcher.new(function(d)
+    if d.eventType == "added" and d.vendorID == 10730 and d.productID == 866 then
+        for _, delay in ipairs({ 1.5, 4 }) do
+            hs.timer.doAfter(delay, function()
+                reapplyKinesisSwap()
+                syncCtrlWForApp(hs.application.frontmostApplication())
+            end)
+        end
+    end
+end)
+kinesisUsbWatcher:start()
+
 -- Option+Shift = toggle input source (ABC <-> Greek), like Windows Alt+Shift.
 -- macOS can't bind a modifier-only shortcut natively, so we watch flag changes:
 -- arm when ONLY alt+shift are held, and fire once on release, unless another
