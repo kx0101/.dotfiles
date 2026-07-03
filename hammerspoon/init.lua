@@ -127,7 +127,10 @@ wakeWatcher:start()
 -- delayed retries let macOS finish creating the HID service before hidutil runs.
 kinesisUsbWatcher = hs.usb.watcher.new(function(d)
     if d.eventType == "added" and d.vendorID == 10730 and d.productID == 866 then
-        for _, delay in ipairs({ 1.5, 4 }) do
+        -- The keyboard's HID event service is created a few seconds AFTER the
+        -- USB "added" event, so a single quick reapply lands before the service
+        -- exists and is lost. Retry across a ~16s window; reapply is idempotent.
+        for _, delay in ipairs({ 1.5, 3, 5, 7, 10, 13, 16 }) do
             hs.timer.doAfter(delay, function()
                 reapplyKinesisSwap()
                 syncCtrlWForApp(hs.application.frontmostApplication())
