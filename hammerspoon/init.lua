@@ -95,6 +95,33 @@ ghosttyFocusWatcher = hs.application.watcher.new(function(_, event, app)
 end)
 ghosttyFocusWatcher:start()
 
+-- After sleep the Kinesis USB keyboard re-enumerates and DROPS its hidutil
+-- Ctrl<->Cmd swap, so the key that should send Ctrl sends Cmd and Ctrl+W (plus
+-- every other Ctrl chord) breaks outside Ghostty. The LaunchAgent only redoes
+-- the swap on its StartInterval, leaving a gap. Re-apply it immediately on wake
+-- by kickstarting that same LaunchAgent (single source of truth for the mapping),
+-- and re-assert the Ctrl+W hotkey for whatever app is now focused.
+-- Use hs.task (not hs.execute with a login shell, which sources ~/.zshrc and can
+-- time out); resolve the uid once via a fast non-login shell.
+local KINESIS_SWAP_AGENT = "com.kx0101.kinesis-ctrl-cmd-swap"
+local uid = (hs.execute("id -u") or "501"):gsub("%s+", "")
+
+local function reapplyKinesisSwap()
+    hs.task.new("/bin/launchctl", nil,
+        { "kickstart", "-k", "gui/" .. uid .. "/" .. KINESIS_SWAP_AGENT }):start()
+end
+
+wakeWatcher = hs.caffeinate.watcher.new(function(event)
+    local w = hs.caffeinate.watcher
+    if event == w.systemDidWake
+        or event == w.screensDidWake
+        or event == w.sessionDidBecomeActive then
+        reapplyKinesisSwap()
+        syncCtrlWForApp(hs.application.frontmostApplication())
+    end
+end)
+wakeWatcher:start()
+
 -- Option+Shift = toggle input source (ABC <-> Greek), like Windows Alt+Shift.
 -- macOS can't bind a modifier-only shortcut natively, so we watch flag changes:
 -- arm when ONLY alt+shift are held, and fire once on release, unless another
