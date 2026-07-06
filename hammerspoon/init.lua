@@ -49,20 +49,38 @@ hs.autoLaunch(true)
 -- delete-word), which native fields, browser inputs and browser rich-text
 -- editors (incl. Messenger/Instagram's Lexical in Brave) all honor.
 --
--- IMPORTANT: this is a Carbon hotkey (hs.hotkey), NOT an event tap. Event
--- taps get silently disabled by macOS (kCGEventTapDisabledByTimeout) with
--- isEnabled() still reporting true, so they stop working and no watchdog
--- reliably catches them. Carbon hotkeys stay registered and never suffer
--- this. We disable the hotkey while Ghostty is focused so zsh's ^W and
--- nvim's Ctrl+W window prefix keep working there, and enable it elsewhere.
+-- We use a low-level eventtap keyed on the PHYSICAL keycode 13 (W), NOT a
+-- Carbon hs.hotkey. hs.hotkey resolves the key through the active keyboard
+-- layout, so when Greek is the input source Ctrl+W silently stops firing
+-- (the key 'w' isn't in the Greek keymap). A raw keycode is layout-independent.
+-- The known downside of eventtaps - macOS disabling them via
+-- kCGEventTapDisabledByTimeout - is handled by (a) keeping this callback fast
+-- (the slow Option+Delete is deferred, never run inline) and (b) a watchdog
+-- that force-restarts the tap.
 local GHOSTTY_BID = "com.mitchellh.ghostty"
+
+-- Cache whether Ghostty is focused so the keyDown callback stays cheap; a slow
+-- callback is what trips the macOS tap-disable timeout in the first place.
+local function isGhosttyFront()
+    local app = hs.application.frontmostApplication()
+    return app ~= nil and app:bundleID() == GHOSTTY_BID
+end
+local ghosttyFocused = isGhosttyFront()
+
+ghosttyFocusWatcher = hs.application.watcher.new(function(_, event, app)
+    if event == hs.application.watcher.activated then
+        ghosttyFocused = (app ~= nil and app:bundleID() == GHOSTTY_BID)
+    end
+end)
+ghosttyFocusWatcher:start()
 
 -- Send Option+Delete as an explicit hold: Option down, Delete down+up with the
 -- Option flag, Option up, with small gaps. A plain keyStroke with no delay gets
 -- interpreted as a single-char delete by contenteditable editors (Messenger's
 -- Lexical, Claude's ProseMirror); actually holding Option makes them honor the
 -- word-delete. Plain fields, the address bar, Obsidian and Discord work either
--- way.
+-- way. This sleeps ~36ms, so it must NEVER run inside the eventtap callback
+-- (that would trip the tap-disable timeout) - callers defer it.
 local function deleteWordBackward()
     local alt = hs.keycodes.map.alt
     local del = hs.keycodes.map.delete
@@ -75,25 +93,42 @@ local function deleteWordBackward()
     hs.eventtap.event.newKeyEvent({}, alt, false):post()
 end
 
--- pressedfn + repeatfn so holding Ctrl+W keeps deleting words; no releasedfn.
-ctrlWHotkey = hs.hotkey.new({ "ctrl" }, "w", deleteWordBackward, nil, deleteWordBackward)
+-- Queue Ctrl+W presses and flush them when Ctrl is RELEASED. The physical key
+-- that produces Ctrl (the right "Windows" key) is still held when the tap fires,
+-- so posting Option+Delete immediately yields Ctrl+Option+Delete and deletes
+-- nothing. Firing on release means no modifier is held and the synthetic
+-- Option+Delete is clean. Keycode 13 keeps it layout-independent (works in Greek).
+local KEYCODE_W = 13
+local pendingCtrlW = 0
 
-local function syncCtrlWForApp(app)
-    local front = app or hs.application.frontmostApplication()
-    if front and front:bundleID() == GHOSTTY_BID then
-        ctrlWHotkey:disable()
-    else
-        ctrlWHotkey:enable()
+ctrlWTap = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, function(e)
+    if ghosttyFocused then
+        return false
     end
-end
-syncCtrlWForApp(hs.application.frontmostApplication())
-
-ghosttyFocusWatcher = hs.application.watcher.new(function(_, event, app)
-    if event == hs.application.watcher.activated then
-        syncCtrlWForApp(app)
+    local f = e:getFlags()
+    if e:getKeyCode() == KEYCODE_W
+        and f.ctrl and not f.cmd and not f.alt and not f.shift and not f.fn then
+        pendingCtrlW = pendingCtrlW + 1
+        return true -- swallow Ctrl+W so it doesn't reach the app
     end
+    return false
 end)
-ghosttyFocusWatcher:start()
+ctrlWTap:start()
+
+-- Flush queued word-deletes the moment Ctrl is no longer held.
+ctrlReleaseTap = hs.eventtap.new({ hs.eventtap.event.types.flagsChanged }, function(e)
+    if pendingCtrlW > 0 and not e:getFlags().ctrl then
+        local n = pendingCtrlW
+        pendingCtrlW = 0
+        hs.timer.doAfter(0, function()
+            for _ = 1, n do
+                deleteWordBackward()
+            end
+        end)
+    end
+    return false
+end)
+ctrlReleaseTap:start()
 
 -- After sleep the Kinesis USB keyboard re-enumerates and DROPS its hidutil
 -- Ctrl<->Cmd swap, so the key that should send Ctrl sends Cmd and Ctrl+W (plus
@@ -117,7 +152,7 @@ wakeWatcher = hs.caffeinate.watcher.new(function(event)
         or event == w.screensDidWake
         or event == w.sessionDidBecomeActive then
         reapplyKinesisSwap()
-        syncCtrlWForApp(hs.application.frontmostApplication())
+        ghosttyFocused = isGhosttyFront()
     end
 end)
 wakeWatcher:start()
@@ -133,7 +168,7 @@ kinesisUsbWatcher = hs.usb.watcher.new(function(d)
         for _, delay in ipairs({ 1.5, 3, 5, 7, 10, 13, 16 }) do
             hs.timer.doAfter(delay, function()
                 reapplyKinesisSwap()
-                syncCtrlWForApp(hs.application.frontmostApplication())
+                ghosttyFocused = isGhosttyFront()
             end)
         end
     end
@@ -187,14 +222,13 @@ end)
 langFlagTap:start()
 langKeyTap:start()
 
--- The language toggle must use event taps (a modifier-only chord can't be a
--- Carbon hotkey). macOS can silently disable an event tap
+-- The Ctrl+W and language-toggle event taps can be silently disabled by macOS
 -- (kCGEventTapDisabledByTimeout) while isEnabled() still reports true, so an
--- isEnabled() check is not enough. Force-restart these taps periodically to
--- guarantee they keep firing. Their callbacks are trivial, so a missed event
--- during the sub-millisecond restart is harmless.
+-- isEnabled() check is not enough. Force-restart them periodically to guarantee
+-- they keep firing. Their callbacks are fast (Ctrl+W defers its slow work), so a
+-- missed event during the sub-millisecond restart is harmless.
 eventTapWatchdog = hs.timer.doEvery(5, function()
-    for _, tap in ipairs({ langFlagTap, langKeyTap }) do
+    for _, tap in ipairs({ ctrlWTap, ctrlReleaseTap, langFlagTap, langKeyTap }) do
         if tap then
             tap:stop()
             tap:start()
