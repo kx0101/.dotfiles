@@ -77,20 +77,11 @@ ghosttyFocusWatcher:start()
 -- Send Option+Delete as an explicit hold: Option down, Delete down+up with the
 -- Option flag, Option up, with small gaps. A plain keyStroke with no delay gets
 -- interpreted as a single-char delete by contenteditable editors (Messenger's
--- Lexical, Claude's ProseMirror); actually holding Option makes them honor the
--- word-delete. Plain fields, the address bar, Obsidian and Discord work either
--- way. This sleeps ~36ms, so it must NEVER run inside the eventtap callback
--- (that would trip the tap-disable timeout) - callers defer it.
+-- word-delete. Verified on this machine: the simple keyStroke below word-deletes
+-- in native fields; a fancier held-Option newKeyEvent sequence did NOT. This is
+-- fast enough to run from the deferred flush.
 local function deleteWordBackward()
-    local alt = hs.keycodes.map.alt
-    local del = hs.keycodes.map.delete
-    hs.eventtap.event.newKeyEvent({}, alt, true):post()
-    hs.timer.usleep(12000)
-    hs.eventtap.event.newKeyEvent({ alt = true }, del, true):post()
-    hs.timer.usleep(12000)
-    hs.eventtap.event.newKeyEvent({ alt = true }, del, false):post()
-    hs.timer.usleep(12000)
-    hs.eventtap.event.newKeyEvent({}, alt, false):post()
+    hs.eventtap.keyStroke({ "alt" }, "delete", 0)
 end
 
 -- Queue Ctrl+W presses and flush them when Ctrl is RELEASED. The physical key
@@ -98,16 +89,26 @@ end
 -- so posting Option+Delete immediately yields Ctrl+Option+Delete and deletes
 -- nothing. Firing on release means no modifier is held and the synthetic
 -- Option+Delete is clean. Keycode 13 keeps it layout-independent (works in Greek).
+--
+-- We do NOT trust the ctrl flag on the W keydown event: this keyboard often
+-- fails to co-report the modifier flag on the key event (observed W-down events
+-- arriving with mods = alt / cmd / none while the Windows key that produces Ctrl
+-- was clearly held). Instead we track Ctrl state independently from flagsChanged
+-- events (which DO report reliably) and consult that tracked state.
 local KEYCODE_W = 13
 local pendingCtrlW = 0
+local ctrlHeld = false
 
 ctrlWTap = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, function(e)
     if ghosttyFocused then
         return false
     end
     local f = e:getFlags()
+    -- Fire on physical W while Ctrl is held (tracked OR flagged), as long as no
+    -- other disqualifying modifier is present. cmd/alt on the event are ignored
+    -- because this keyboard mislabels the modifier; ctrlHeld is the source of truth.
     if e:getKeyCode() == KEYCODE_W
-        and f.ctrl and not f.cmd and not f.alt and not f.shift and not f.fn then
+        and (ctrlHeld or f.ctrl) and not f.shift and not f.fn then
         pendingCtrlW = pendingCtrlW + 1
         return true -- swallow Ctrl+W so it doesn't reach the app
     end
@@ -115,9 +116,11 @@ ctrlWTap = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, function(e)
 end)
 ctrlWTap:start()
 
--- Flush queued word-deletes the moment Ctrl is no longer held.
+-- Track Ctrl state, and flush queued word-deletes the moment Ctrl is released.
 ctrlReleaseTap = hs.eventtap.new({ hs.eventtap.event.types.flagsChanged }, function(e)
-    if pendingCtrlW > 0 and not e:getFlags().ctrl then
+    local ctrlNow = e:getFlags().ctrl == true
+    ctrlHeld = ctrlNow
+    if pendingCtrlW > 0 and not ctrlNow then
         local n = pendingCtrlW
         pendingCtrlW = 0
         hs.timer.doAfter(0, function()
