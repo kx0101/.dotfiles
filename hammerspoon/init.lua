@@ -84,11 +84,8 @@ local function deleteWordBackward()
     hs.eventtap.keyStroke({ "alt" }, "delete", 0)
 end
 
--- Queue Ctrl+W presses and flush them when Ctrl is RELEASED. The physical key
--- that produces Ctrl (the right "Windows" key) is still held when the tap fires,
--- so posting Option+Delete immediately yields Ctrl+Option+Delete and deletes
--- nothing. Firing on release means no modifier is held and the synthetic
--- Option+Delete is clean. Keycode 13 keeps it layout-independent (works in Greek).
+-- Fire the word-delete immediately on Ctrl+W press. Keycode 13 keeps it
+-- layout-independent (works in Greek).
 --
 -- We do NOT trust the ctrl flag on the W keydown event: this keyboard often
 -- fails to co-report the modifier flag on the key event (observed W-down events
@@ -96,8 +93,14 @@ end
 -- was clearly held). Instead we track Ctrl state independently from flagsChanged
 -- events (which DO report reliably) and consult that tracked state.
 local KEYCODE_W = 13
-local pendingCtrlW = 0
 local ctrlHeld = false
+
+-- Track Ctrl state from the reliable flagsChanged events.
+ctrlTrackTap = hs.eventtap.new({ hs.eventtap.event.types.flagsChanged }, function(e)
+    ctrlHeld = e:getFlags().ctrl == true
+    return false
+end)
+ctrlTrackTap:start()
 
 ctrlWTap = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, function(e)
     if ghosttyFocused then
@@ -109,29 +112,15 @@ ctrlWTap = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, function(e)
     -- because this keyboard mislabels the modifier; ctrlHeld is the source of truth.
     if e:getKeyCode() == KEYCODE_W
         and (ctrlHeld or f.ctrl) and not f.shift and not f.fn then
-        pendingCtrlW = pendingCtrlW + 1
+        -- Defer so the tap callback returns immediately (a slow callback trips the
+        -- macOS tap-disable timeout). Firing on press works even with the physical
+        -- Ctrl key held because keyStroke posts a clean Option+Delete.
+        hs.timer.doAfter(0, deleteWordBackward)
         return true -- swallow Ctrl+W so it doesn't reach the app
     end
     return false
 end)
 ctrlWTap:start()
-
--- Track Ctrl state, and flush queued word-deletes the moment Ctrl is released.
-ctrlReleaseTap = hs.eventtap.new({ hs.eventtap.event.types.flagsChanged }, function(e)
-    local ctrlNow = e:getFlags().ctrl == true
-    ctrlHeld = ctrlNow
-    if pendingCtrlW > 0 and not ctrlNow then
-        local n = pendingCtrlW
-        pendingCtrlW = 0
-        hs.timer.doAfter(0, function()
-            for _ = 1, n do
-                deleteWordBackward()
-            end
-        end)
-    end
-    return false
-end)
-ctrlReleaseTap:start()
 
 -- After sleep the Kinesis USB keyboard re-enumerates and DROPS its hidutil
 -- Ctrl<->Cmd swap, so the key that should send Ctrl sends Cmd and Ctrl+W (plus
@@ -231,7 +220,7 @@ langKeyTap:start()
 -- they keep firing. Their callbacks are fast (Ctrl+W defers its slow work), so a
 -- missed event during the sub-millisecond restart is harmless.
 eventTapWatchdog = hs.timer.doEvery(5, function()
-    for _, tap in ipairs({ ctrlWTap, ctrlReleaseTap, langFlagTap, langKeyTap }) do
+    for _, tap in ipairs({ ctrlWTap, ctrlTrackTap, langFlagTap, langKeyTap }) do
         if tap then
             tap:stop()
             tap:start()
