@@ -357,21 +357,15 @@ require("lazy").setup({
     -- =============================================
     {
         "nvim-treesitter/nvim-treesitter",
-        commit = "7caec274fd19c12b55902a5b795100d21531391f",
-        event = { "BufReadPre", "BufNewFile" },
-        lazy = true,
+        branch = "main",
+        lazy = false,
         build = ":TSUpdate",
         config = function()
             local ts = require("nvim-treesitter")
             ts.setup({})
 
             local ensure_installed = { "c", "lua", "rust", "javascript", "typescript", "go", "c_sharp" }
-            local installed = ts.get_installed()
-            for _, lang in ipairs(ensure_installed) do
-                if not vim.tbl_contains(installed, lang) then
-                    vim.defer_fn(function() ts.install({ lang }) end, 2000)
-                end
-            end
+            ts.install(ensure_installed)
 
             -- On Windows, symlink creation for queries can silently fail.
             -- Create junctions for any parsers missing query links.
