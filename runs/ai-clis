@@ -27,18 +27,27 @@ if ! command -v gh > /dev/null 2>&1 && [ "$(uname -s)" = "Darwin" ]; then
 fi
 
 dotfiles_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-mkdir -p "$HOME/.claude/skills"
 
-for skill_dir in "$dotfiles_dir"/claude/skills/*; do
-    [ -d "$skill_dir" ] || continue
+link_skills() {
+    local source_dir="$1"
+    local destination_dir="$2"
 
-    destination="$HOME/.claude/skills/$(basename "$skill_dir")"
-    if [ -e "$destination" ] && [ ! -L "$destination" ]; then
-        echo "Cannot link Claude skill: $destination already exists and is not a symlink." >&2
-        exit 1
-    fi
+    mkdir -p "$destination_dir"
 
-    ln -sfn "$skill_dir" "$destination"
-done
+    for skill_dir in "$source_dir"/*; do
+        [ -d "$skill_dir" ] || continue
+
+        destination="$destination_dir/$(basename "$skill_dir")"
+        if [ -e "$destination" ] && [ ! -L "$destination" ]; then
+            echo "Cannot link skill: $destination already exists and is not a symlink." >&2
+            exit 1
+        fi
+
+        ln -sfn "$skill_dir" "$destination"
+    done
+}
+
+link_skills "$dotfiles_dir/claude/skills" "$HOME/.claude/skills"
+link_skills "$dotfiles_dir/copilot/skills" "$HOME/.copilot/skills"
 
 echo "Done. Authenticate with: copilot   and   claude"
