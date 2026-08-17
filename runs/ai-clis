@@ -26,4 +26,19 @@ if ! command -v gh > /dev/null 2>&1 && [ "$(uname -s)" = "Darwin" ]; then
     brew install gh
 fi
 
+dotfiles_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+mkdir -p "$HOME/.claude/skills"
+
+for skill_dir in "$dotfiles_dir"/claude/skills/*; do
+    [ -d "$skill_dir" ] || continue
+
+    destination="$HOME/.claude/skills/$(basename "$skill_dir")"
+    if [ -e "$destination" ] && [ ! -L "$destination" ]; then
+        echo "Cannot link Claude skill: $destination already exists and is not a symlink." >&2
+        exit 1
+    fi
+
+    ln -sfn "$skill_dir" "$destination"
+done
+
 echo "Done. Authenticate with: copilot   and   claude"
