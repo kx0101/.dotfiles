@@ -126,8 +126,9 @@ cancellations, attention states, and next billing/end dates. This is read-only
 and must use a token from environment or macOS Keychain. Never persist its
 response in Obsidian.
 
-Render logs are read-only, bounded, and redacted. Resend activity reports only
-timestamps and delivery events; recipients and subjects are omitted.
+Render logs are read-only, bounded, and redacted. Resend activity shows the five
+most recent emails by default: timestamp, subject, masked recipients, and
+delivery event. Never expose a full recipient address.
 
 ## Calendar
 

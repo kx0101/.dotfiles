@@ -693,6 +693,15 @@ def redact_external_text(value: str) -> str:
     return redacted
 
 
+def mask_email(value: str) -> str:
+    match = EMAIL_PATTERN.fullmatch(value.strip())
+    if not match:
+        return "<REDACTED>"
+    local, domain = value.strip().rsplit("@", 1)
+    visible = local[:1]
+    return f"{visible}***@{domain}"
+
+
 def github_attention(repository: str | None = None) -> dict[str, Any]:
     authored = run_json(
         [
@@ -2195,6 +2204,13 @@ def resend_activity(vault: Path, name: str, limit: int) -> dict[str, Any]:
             rows.append(
                 {
                     "created_at": email.get("created_at"),
+                    "subject": redact_external_text(
+                        str(email.get("subject") or "")
+                    ),
+                    "recipients": [
+                        mask_email(str(recipient))
+                        for recipient in email.get("to") or []
+                    ],
                     "last_event": event,
                 }
             )
@@ -2208,8 +2224,7 @@ def resend_activity(vault: Path, name: str, limit: int) -> dict[str, Any]:
         "project": project.name,
         "summary": counts,
         "emails": rows,
-        "recipients_omitted": True,
-        "subjects_omitted": True,
+        "recipients_masked": True,
         "pages_scanned": pages_scanned,
         "truncated": has_more and pages_scanned >= 20,
     }
@@ -2393,7 +2408,7 @@ def build_parser() -> argparse.ArgumentParser:
     render_logs_parser.add_argument("--text")
     resend_parser = commands.add_parser("resend-emails")
     resend_parser.add_argument("--name", required=True)
-    resend_parser.add_argument("--limit", type=int, default=20)
+    resend_parser.add_argument("--limit", type=int, default=5)
     commands.add_parser("weekly-review")
     commands.add_parser("dashboard")
     return parser

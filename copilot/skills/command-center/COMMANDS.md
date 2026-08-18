@@ -144,15 +144,15 @@ python3 scripts/command_center.py bookit-business
 python3 scripts/command_center.py render-logs --name BookIt --limit 30
 python3 scripts/command_center.py render-logs \
   --name BookIt --level error --text "database"
-python3 scripts/command_center.py resend-emails --name BookIt --limit 20
+python3 scripts/command_center.py resend-emails --name BookIt
 ```
 
 `bookit-business` resolves `BOOKIT_ADMIN_TOKEN` from the environment, then from
 macOS Keychain service `command-center-bookit-admin`. Responses are never stored.
 `resend-emails` does the same with `RESEND_API_KEY` and Keychain service
-`command-center-resend-api`; recipient addresses and subjects are omitted.
-Render uses the already-authenticated local Render CLI. Logs are redacted and
-never persisted.
+`command-center-resend-api`; it shows five recent subjects with masked recipient
+addresses and delivery status. Render uses the already-authenticated local
+Render CLI. Logs are redacted and never persisted.
 
 Append project knowledge with an explicit type and source:
 
