@@ -2220,9 +2220,11 @@ def complete_work_task(vault: Path, query: str) -> dict[str, Any]:
     matches = [
         task
         for task in parse_work_tasks(vault)
-        if task.managed
-        and not task.completed
-        and normalized in task.title.casefold()
+        if not task.completed
+        and (
+            task.managed
+            or task.title.casefold() == normalized
+        )
     ]
     if not matches:
         raise CommandCenterError(f"No open work task matches: {query}")
