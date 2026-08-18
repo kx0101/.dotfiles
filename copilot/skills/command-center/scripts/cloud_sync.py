@@ -485,7 +485,7 @@ def process_commands(
     base_url: str,
     service_key: str,
     user_id: str,
-) -> int:
+) -> tuple[int, list[tuple[str, dict[str, Any]]]]:
     commands = request_json(
         base_url,
         service_key,
@@ -494,6 +494,7 @@ def process_commands(
         f"?user_id=eq.{user_id}&status=eq.pending&order=created_at.asc&limit=20",
     )
     processed = 0
+    applied: list[tuple[str, dict[str, Any]]] = []
     for command in commands or []:
         command_id = str(command["id"])
         claimed = request_json(
@@ -521,11 +522,47 @@ def process_commands(
                 base_url,
                 service_key,
                 command_id,
-                "done",
+                "processing",
                 result,
             )
+            applied.append((command_id, result))
         processed += 1
-    return processed
+    return processed, applied
+
+
+def applied_commands(
+    base_url: str,
+    service_key: str,
+    user_id: str,
+) -> list[tuple[str, dict[str, Any]]]:
+    commands = request_json(
+        base_url,
+        service_key,
+        "GET",
+        "command_center_commands"
+        f"?user_id=eq.{user_id}&status=eq.processing&result=not.is.null"
+        "&select=id,result&order=created_at.asc",
+    )
+    return [
+        (str(command["id"]), command["result"])
+        for command in commands or []
+        if isinstance(command.get("result"), dict)
+    ]
+
+
+def finalize_commands(
+    base_url: str,
+    service_key: str,
+    commands: list[tuple[str, dict[str, Any]]],
+) -> None:
+    for command_id, result in commands:
+        update_command(
+            base_url,
+            service_key,
+            command_id,
+            "done",
+            result,
+        )
 
 
 def main() -> None:
@@ -537,8 +574,15 @@ def main() -> None:
             print(json.dumps({"processed": 0, "snapshot": "skipped_locked"}))
             return
         base_url, service_key, user_id = configuration()
-        processed = process_commands(base_url, service_key, user_id)
+        applied = applied_commands(base_url, service_key, user_id)
+        processed, new_applied = process_commands(
+            base_url,
+            service_key,
+            user_id,
+        )
+        applied.extend(new_applied)
         push_snapshot(base_url, service_key, user_id)
+        finalize_commands(base_url, service_key, applied)
         print(json.dumps({"processed": processed, "snapshot": "updated"}))
 
 

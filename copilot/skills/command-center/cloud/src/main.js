@@ -25,6 +25,25 @@ function localDate(value = new Date()) {
     .slice(0, 10);
 }
 
+function formatGreekDateValue(value) {
+  if (!value) return "";
+  const hasTime = String(value).includes("T");
+  const date = new Date(hasTime ? value : `${value}T12:00:00`);
+  if (Number.isNaN(date.valueOf())) return String(value).replace("T", " ");
+  const options = {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  };
+  if (hasTime) {
+    options.hour = "2-digit";
+    options.minute = "2-digit";
+    options.hour12 = false;
+    options.hourCycle = "h23";
+  }
+  return new Intl.DateTimeFormat("el-GR", options).format(date);
+}
+
 function isHistorical() {
   return selectedDate < localDate();
 }
@@ -114,7 +133,9 @@ function renderPendingQueue(commands) {
         "item-meta",
         [
           pendingActionLabel(command.action, command.payload),
-          command.payload.start ?? command.payload.date ?? "",
+          formatGreekDateValue(
+            command.payload.start ?? command.payload.date ?? "",
+          ),
         ]
           .filter(Boolean)
           .join(" · "),
@@ -195,13 +216,13 @@ function proposalDetails(proposal) {
     return [
       ["Από", payload.old_title],
       ["Σε", payload.title],
-      ["Ημερομηνία", payload.date],
+      ["Ημερομηνία", formatGreekDateValue(payload.date)],
     ];
   }
   if (proposal.action === "update-calendar-event") {
     return [
       ["Τίτλος", payload.title],
-      ["Έναρξη", payload.start],
+      ["Έναρξη", formatGreekDateValue(payload.start)],
       ["Διάρκεια", `${payload.duration} λεπτά`],
       ["Calendar", payload.calendar],
     ];
@@ -222,7 +243,11 @@ function proposalDetails(proposal) {
     )
     .map(([key, value]) => [
       labels[key] ?? key,
-      key === "duration" ? `${value} λεπτά` : String(value),
+      ["date", "start"].includes(key)
+        ? formatGreekDateValue(value)
+        : key === "duration"
+          ? `${value} λεπτά`
+          : String(value),
     ]);
 }
 
@@ -329,7 +354,7 @@ function chatContext() {
         completed: Boolean(item.completed),
         entity_key: taskEntityKey("work", item),
       })),
-    reminders: (snapshotPayload.reminders ?? [])
+    reminders: (snapshotPayload.all_reminders ?? snapshotPayload.reminders ?? [])
       .slice(0, 100)
       .map((item) => ({
         id: item.id,
@@ -664,6 +689,8 @@ function reminderDue(value) {
   if (/T(?!00:00)\d{2}:\d{2}/.test(value)) {
     options.hour = "2-digit";
     options.minute = "2-digit";
+    options.hour12 = false;
+    options.hourCycle = "h23";
   }
   return new Intl.DateTimeFormat("el-GR", options).format(date);
 }
@@ -1204,6 +1231,15 @@ function renderSnapshot(snapshot) {
   } else {
     snapshotPayload = rawPayload;
   }
+  snapshotPayload = {
+    ...snapshotPayload,
+    reminders: (snapshotPayload.reminders ?? []).filter((item) =>
+      item.due
+        ? item.due.slice(0, 10) === selectedDate
+        : selectedDate === localDate() && !isHistorical(),
+    ),
+    all_reminders: rawPayload.reminders ?? [],
+  };
   const pending = (action, predicate) =>
     pendingCommands.some(
       (command) => command.action === action && predicate(command.payload),
@@ -1299,10 +1335,16 @@ function renderSnapshot(snapshot) {
   for (const command of pendingCommands.filter(
     (entry) => entry.action === "add-reminder",
   )) {
+    const pendingDate = command.payload.date ?? "";
+    if (
+      (pendingDate && pendingDate.slice(0, 10) !== selectedDate) ||
+      (!pendingDate && selectedDate !== localDate())
+    ) {
+      continue;
+    }
     if (
       !remindersWithPending.some(
         (item) => {
-          const pendingDate = command.payload.date ?? "";
           const existingDate = pendingDate.includes("T")
             ? item.due?.slice(0, 16)
             : item.due?.slice(0, 10);
@@ -1322,24 +1364,30 @@ function renderSnapshot(snapshot) {
       });
     }
   }
-  const reminders = remindersWithPending.map((item) => {
-    const update = pendingCommands.find(
-      (command) =>
-        command.action === "update-reminder" &&
-        command.payload.id === item.id,
+  const reminders = remindersWithPending
+    .map((item) => {
+      const update = pendingCommands.find(
+        (command) =>
+          command.action === "update-reminder" &&
+          command.payload.id === item.id,
+      );
+      return {
+        ...item,
+        title: update?.payload.title ?? item.title,
+        due: update?.payload.date ?? item.due,
+        completed:
+          item.completed ||
+          pending(
+            "complete-reminder",
+            (payload) => payload.id === item.id,
+          ),
+      };
+    })
+    .filter((item) =>
+      item.due
+        ? item.due.slice(0, 10) === selectedDate
+        : selectedDate === localDate() && !isHistorical(),
     );
-    return {
-      ...item,
-      title: update?.payload.title ?? item.title,
-      due: update?.payload.date ?? item.due,
-      completed:
-        item.completed ||
-        pending(
-          "complete-reminder",
-          (payload) => payload.id === item.id,
-        ),
-    };
-  });
   const learningWithPending = [...(snapshotPayload.learning ?? [])];
   for (const command of pendingCommands.filter(
     (entry) => entry.action === "add-learning",
@@ -1969,9 +2017,9 @@ function maybeShowBriefing() {
 async function refresh() {
   if (!session) return;
   setStatus("Ανανέωση…");
-  const [snapshot, commands] = await Promise.all([
+  const commands = isHistorical() ? [] : await loadPendingCommands();
+  const [snapshot] = await Promise.all([
     loadSnapshot(),
-    isHistorical() ? Promise.resolve([]) : loadPendingCommands(),
     loadHealth(),
     isHistorical() ? Promise.resolve() : loadScratchpad(),
   ]);
@@ -1982,20 +2030,21 @@ async function refresh() {
     renderScratchpad(snapshot?.payload?.scratchpad ?? null);
     $("#scratchpad").readOnly = true;
     document.body.classList.add("history-mode");
-    $("#history-mode").textContent = `Στιγμιότυπο ${selectedDate}`;
+    $("#history-mode").textContent =
+      `Στιγμιότυπο ${formatGreekDateValue(selectedDate)}`;
     setStatus(
       snapshot
-        ? `Ιστορικό στιγμιότυπο ${selectedDate}`
-        : `Δεν υπάρχει στιγμιότυπο για ${selectedDate}`,
+        ? `Ιστορικό στιγμιότυπο ${formatGreekDateValue(selectedDate)}`
+        : `Δεν υπάρχει στιγμιότυπο για ${formatGreekDateValue(selectedDate)}`,
     );
   } else {
     $("#scratchpad").readOnly = false;
     document.body.classList.remove("history-mode");
     $("#history-mode").textContent = isFuture()
-      ? `Προγραμματισμός ${selectedDate}`
+      ? `Προγραμματισμός ${formatGreekDateValue(selectedDate)}`
       : "Ζωντανή προβολή";
     if (isFuture()) {
-      setStatus(`Προγραμματισμός για ${selectedDate}`);
+      setStatus(`Προγραμματισμός για ${formatGreekDateValue(selectedDate)}`);
     }
   }
   await loadSyncStatus(snapshot);

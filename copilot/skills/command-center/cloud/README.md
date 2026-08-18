@@ -61,6 +61,11 @@ snapshot or vault.
 Work data is limited to task title/date/status metadata; Work note content is
 excluded.
 
+Existing-item reads and mutations use an internal `search_entities` module over
+the owner snapshot. The server infers filters and injects only matching metadata,
+capped at 30 items, before a single model call. Casual and create-only turns skip
+retrieval; an MCP adapter can reuse the same interface later.
+
 ## Mac sync agent
 
 After the first GitHub login, copy the user's UUID from Supabase Authentication →

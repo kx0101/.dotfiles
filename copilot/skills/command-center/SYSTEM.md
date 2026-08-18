@@ -93,6 +93,10 @@ overlays so refresh does not revert optimistic UI state.
 Reminder dates may be date-only (`YYYY-MM-DD`) or timed local values
 (`YYYY-MM-DDTHH:mm`). Timed values must survive the queue, macOS Reminders,
 snapshots, display, and editing without being truncated.
+The Reminders panel is scoped to the selected date; undated items appear only in
+the current live view. Chat retains a separate capped catalog of all open
+reminders for cross-date CRUD. User-facing dates use Greek 24-hour formatting;
+ISO strings remain internal payload values.
 New Calendar events default to the `Work` calendar in chat and the manual event
 form unless the owner explicitly selects another calendar.
 
@@ -140,8 +144,11 @@ ephemerally to OpenAI for proposal resolution. Work exposure is limited to task
 title/date/status metadata explicitly approved by the owner. They are not added
 to the snapshot or vault. Complete Work notes, Mail bodies, credentials, and
 provider payloads remain excluded.
-The server selects entity catalogs by conversation domain/title before the model
-call, reducing latency, token use, and unrelated metadata exposure.
+Existing-item reads and mutations use the internal `search_entities` module.
+The server infers type/date/time filters, searches snapshot metadata, and injects
+at most 30 exact matches before the single model call. Casual and create-only
+turns skip retrieval entirely. This deep module can gain OpenAI function-calling
+or MCP adapters later without changing queue or proposal behavior.
 
 Allowlisted cloud writes:
 
@@ -166,6 +173,13 @@ prevents rapid checkbox clicks from queuing contradictory complete/reopen action
 The semantic chat action `update-calendar-event` is adapted to the existing
 allowlisted `add-calendar-event` queue action with `operation=update`; the Mac
 agent routes it to `calendar-update`.
+
+A successful Mac mutation remains `processing` with its result until the same
+locked sync run publishes the new snapshot; only then does it become `done`.
+Runs recover applied `processing` commands after a snapshot-publish failure.
+The browser loads active commands before loading the snapshot. Together these
+ordering invariants prevent a torn read where an overlay disappears while the
+browser still holds the pre-mutation snapshot.
 
 Cloud captures remain durable while the Mac is offline. Vercel overlays pending
 task, reminder, and Learning additions immediately so they remain visible until
