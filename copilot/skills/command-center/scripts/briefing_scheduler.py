@@ -140,19 +140,26 @@ def render_weekly() -> str:
     return "\n".join(lines) + "\n"
 
 
-def notify(kind: str, path: Path) -> None:
+def apple_script_string(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def notify(kind: str, path: Path, content: str) -> None:
     title = "Command Center"
+    preview = [
+        line.removeprefix("- ").strip()
+        for line in content.splitlines()
+        if line.startswith("- ")
+    ][:4]
     message = f"{kind} briefing έτοιμο"
-    subprocess.run(
-        [
-            "osascript",
-            "-e",
-            f'display notification "{message}" with title "{title}"',
-        ],
-        check=False,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+    if preview:
+        message += " · " + " · ".join(preview)
+    script = (
+        f"display notification {apple_script_string(message)} "
+        f"with title {apple_script_string(title)} "
+        f"subtitle {apple_script_string(str(path))} sound name \"Glass\""
     )
+    subprocess.run(["osascript", "-e", script], check=True)
 
 
 def main() -> None:
@@ -163,7 +170,7 @@ def main() -> None:
     ARCHIVE.mkdir(parents=True, exist_ok=True)
     path = ARCHIVE / f"{kind}-{datetime.now().astimezone():%Y-%m-%d}.md"
     path.write_text(content, encoding="utf-8")
-    notify(kind, path)
+    notify(kind, path, content)
     print(path)
 
 
