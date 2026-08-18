@@ -31,10 +31,22 @@ python3 scripts/command_center.py calendar-today
 python3 scripts/command_center.py calendar-range --days 14
 python3 scripts/command_center.py mail
 python3 scripts/command_center.py mail --query "invoice"
+
+# Generate a local briefing immediately
+python3 scripts/briefing_scheduler.py morning
+python3 scripts/briefing_scheduler.py weekly
+
+# Install macOS LaunchAgents: daily 08:30 and Monday 08:30
+python3 scripts/install_briefing_schedule.py
 ```
 
 `dashboard` surfaces integration failures in its `errors` object. Report them;
 never present a partial result as fully successful.
+
+Scheduled briefings are stored privately under
+`~/Library/Application Support/Command Center/Briefings/`, not in the Obsidian
+vault. The morning briefing includes urgent items, calls, calendar entries,
+Reminders, and mirrored todos for today.
 
 ## Task mutations
 

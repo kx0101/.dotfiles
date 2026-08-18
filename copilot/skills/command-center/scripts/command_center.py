@@ -1421,7 +1421,7 @@ return calendarNames as text
     return [name for name in output.splitlines() if name.strip()]
 
 
-def calendar_today() -> list[dict[str, str]]:
+def calendar_events_today() -> list[dict[str, str]]:
     script = APPLE_SCRIPT_HELPERS + r'''
 set startDate to current date
 set time of startDate to 0
@@ -1444,6 +1444,66 @@ return output as text
         run_osascript(script),
         ["calendar", "title", "start", "end", "all_day"],
     )
+    events.sort(key=lambda event: (event["start"], event["calendar"], event["title"]))
+    return events
+
+
+def reminders_today() -> list[dict[str, str]]:
+    script = APPLE_SCRIPT_HELPERS + r'''
+set startDate to current date
+set time of startDate to 0
+set endDate to startDate + (1 * days)
+set output to {}
+tell application "Reminders"
+    repeat with targetList in lists
+        set listName to name of targetList
+        repeat with reminderItem in reminders of targetList
+            if completed of reminderItem is false then
+                try
+                    set dueDate to due date of reminderItem
+                    if dueDate is not missing value and dueDate >= startDate and dueDate < endDate then
+                        set reminderLine to my cleanText(listName) & tab & my cleanText(name of reminderItem) & tab & my isoDate(dueDate)
+                        set end of output to reminderLine
+                    end if
+                end try
+            end if
+        end repeat
+    end repeat
+end tell
+set AppleScript's text item delimiters to linefeed
+return output as text
+'''
+    reminders = parse_tabular_output(
+        run_osascript(script),
+        ["list", "title", "due"],
+    )
+    return [
+        {
+            "calendar": reminder["list"],
+            "title": reminder["title"],
+            "start": reminder["due"],
+            "end": reminder["due"],
+            "all_day": "true",
+            "kind": "reminder",
+        }
+        for reminder in reminders
+    ]
+
+
+def calendar_today() -> list[dict[str, str]]:
+    events = calendar_events_today()
+    for event in events:
+        calendar = event["calendar"].casefold()
+        event["kind"] = (
+            "birthday"
+            if "birthday" in calendar
+            else "holiday"
+            if "holiday" in calendar
+            else "note"
+            if "note" in calendar
+            else "event"
+        )
+    events.extend(reminders_today())
     events.sort(key=lambda event: (event["start"], event["calendar"], event["title"]))
     return events
 

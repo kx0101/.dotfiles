@@ -29,6 +29,12 @@ The opening surface is `home`: it combines the morning dashboard with the weekly
 review. Personal and Work daily tasks are optional sections and are included only
 when the user asks for them or the application preference enables them.
 
+Scheduled briefings run locally through macOS LaunchAgents at 08:30 daily and
+08:30 every Monday. The morning briefing must include urgent items for today,
+calls and meetings, all-day calendar entries such as holidays/birthdays/notes,
+Reminders, and mirrored todos. Briefing archives stay outside the vault under
+`~/Library/Application Support/Command Center/Briefings/`.
+
 Use `exceptions` for the attention-only view. It aggregates overdue tasks, overdue
 Waiting-on items, failed health checks/CI, Resend bounces, and BookIt trial,
 cancellation, renewal, or subscription attention states. External responses remain
