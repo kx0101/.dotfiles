@@ -10,6 +10,26 @@
   </head>
   <body>
     <main class="shell">
+      <aside class="os-sidebar">
+        <div class="os-brand">
+          <span class="eyebrow">PERSONAL OS</span>
+          <strong>kx//cc</strong>
+        </div>
+        <nav class="os-nav" aria-label="Ενότητες Command Center">
+          <a href="#today-panel">Σήμερα</a>
+          <a href="#work-panel">Δουλειά</a>
+          <a href="#personal-panel">Προσωπικά</a>
+          <a href="#projects-panel">Έργα</a>
+          <a href="#learning-panel">Μάθηση</a>
+          <a href="#history-panel">Ιστορικό</a>
+        </nav>
+        <div class="os-sidebar-footer">
+          <span class="status-dot"></span>
+          <span>Command Center</span>
+        </div>
+      </aside>
+
+      <div class="os-content">
       <header class="topbar">
         <div>
           <p class="eyebrow">COMMAND CENTER</p>
@@ -91,7 +111,7 @@
 
       <section class="view">
         <div class="dashboard-grid">
-          <section class="panel span-2 scratchpad-panel">
+          <section id="scratchpad-panel" class="panel span-2 scratchpad-panel">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">ΣΗΜΕΙΩΜΑΤΑΡΙΟ</p>
@@ -109,7 +129,7 @@
             ></textarea>
           </section>
 
-          <section class="panel span-2">
+          <section id="today-panel" class="panel span-2">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">ΣΗΜΕΡΑ</p>
@@ -120,7 +140,7 @@
             <div id="agenda" class="list"></div>
           </section>
 
-          <section class="panel span-2">
+          <section id="reminders-panel" class="panel span-2">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">ΥΠΕΝΘΥΜΙΣΕΙΣ</p>
@@ -150,7 +170,7 @@
             <div id="personal-tasks" class="list"></div>
           </section>
 
-          <section class="panel">
+          <section id="systems-panel" class="panel">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">ΣΥΣΤΗΜΑΤΑ</p>
@@ -160,7 +180,7 @@
             <div id="health" class="list"></div>
           </section>
 
-          <section class="panel">
+          <section id="mail-panel" class="panel">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">EMAIL</p>
@@ -170,7 +190,7 @@
             <div id="mail" class="list"></div>
           </section>
 
-          <section class="panel span-2">
+          <section id="learning-panel" class="panel span-2">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">ΓΙΑ ΑΡΓΟΤΕΡΑ</p>
@@ -185,7 +205,7 @@
             <div id="learning" class="learning-list"></div>
           </section>
 
-          <section class="panel span-2">
+          <section id="projects-panel" class="panel span-2">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">ΕΝΕΡΓΑ</p>
@@ -195,7 +215,7 @@
             <div id="projects" class="project-grid"></div>
           </section>
 
-          <section class="panel span-2">
+          <section id="apple-health-panel" class="panel span-2">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">ΠΡΟΣΩΠΙΚΗ ΥΓΕΙΑ</p>
@@ -205,7 +225,7 @@
             <div id="apple-health" class="health-metrics"></div>
           </section>
 
-          <section class="panel span-2">
+          <section id="history-panel" class="panel span-2">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">ΙΣΤΟΡΙΚΟ</p>
@@ -215,7 +235,7 @@
             <div id="audit-timeline" class="audit-timeline"></div>
           </section>
 
-          <section class="panel span-2">
+          <section id="sync-panel" class="panel span-2">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">ΣΥΓΧΡΟΝΙΣΜΟΣ</p>
@@ -227,6 +247,7 @@
           </section>
         </div>
       </section>
+      </div>
 
       <dialog id="project-dialog">
         <div class="dialog-header">
