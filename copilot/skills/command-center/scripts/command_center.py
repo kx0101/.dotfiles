@@ -662,6 +662,7 @@ def add_task(
     area: str | None,
     project: str | None,
     action_date: str | None,
+    parent_line: int | None = None,
 ) -> dict[str, Any]:
     if "\n" in title or "\r" in title:
         raise CommandCenterError("Task title must fit on one line.")
@@ -676,6 +677,10 @@ def add_task(
         raise CommandCenterError("Use either --area or --project, not both.")
     if action_date:
         validate_iso_date(action_date)
+    if parent_line is not None and (parent_line < 1 or not action_date):
+        raise CommandCenterError(
+            "A parent line requires a positive line number and dated task."
+        )
     if area == "Work" and action_date:
         raise CommandCenterError(
             "Dated Work tasks must be added with work-task-add."
@@ -720,12 +725,13 @@ def add_task(
             vault,
             title,
             action_date,
+            parent_line,
         )
     audit_event(
         "added",
         "task",
         title,
-        {"area": section, "date": action_date},
+        {"area": section, "date": action_date, "parent_line": parent_line},
     )
     return {
         "title": title,
@@ -736,6 +742,7 @@ def add_task(
         "calendar_uid": calendar_uid,
         "sync_provider": sync_provider,
         "daily_path": daily_path,
+        "parent_line": parent_line,
     }
 
 
@@ -3044,6 +3051,7 @@ def append_personal_daily_task(
     vault: Path,
     title: str,
     target_date: str,
+    parent_line: int | None = None,
 ) -> str:
     parsed_date = date.fromisoformat(target_date)
     path, _ = ensure_personal_daily_file(vault, parsed_date)
@@ -3056,7 +3064,41 @@ def append_personal_daily_task(
             if (match := DAILY_TASK_PATTERN.match(line))
         )
         if not exists:
-            lines.append(f"- [ ] {title}")
+            new_line = f"- [ ] {title}"
+            if parent_line is None:
+                lines.append(new_line)
+            else:
+                parent_index = parent_line - 1
+                if parent_index < 0 or parent_index >= len(lines):
+                    raise CommandCenterError("Personal parent line is out of range.")
+                parent_match = DAILY_TASK_PATTERN.match(lines[parent_index])
+                if (
+                    not parent_match
+                    or parent_match.group("state").lower() == "x"
+                ):
+                    raise CommandCenterError(
+                        "Personal parent must be an open daily task."
+                    )
+                parent_indent = (
+                    len(lines[parent_index])
+                    - len(lines[parent_index].lstrip(" \t"))
+                )
+                insertion = parent_index + 1
+                while insertion < len(lines):
+                    candidate = DAILY_TASK_PATTERN.match(lines[insertion])
+                    if candidate:
+                        indent = (
+                            len(lines[insertion])
+                            - len(lines[insertion].lstrip(" \t"))
+                        )
+                        if indent <= parent_indent:
+                            break
+                    insertion += 1
+                leading = lines[parent_index][
+                    : len(lines[parent_index])
+                    - len(lines[parent_index].lstrip(" \t"))
+                ]
+                lines.insert(insertion, f"{leading}\t- [ ] {title}")
             atomic_write(path, "\n".join(lines).rstrip() + "\n")
     return str(path.relative_to(vault))
 
@@ -3339,11 +3381,18 @@ def parse_work_tasks(vault: Path) -> list[WorkTask]:
     return tasks
 
 
-def add_work_task(vault: Path, title: str, task_date: str) -> dict[str, Any]:
+def add_work_task(
+    vault: Path,
+    title: str,
+    task_date: str,
+    parent_line: int | None = None,
+) -> dict[str, Any]:
     validate_iso_date(task_date)
     normalized_title = " ".join(title.split())
     if not normalized_title or "\n" in title or "\r" in title:
         raise CommandCenterError("Work task title must fit on one non-empty line.")
+    if parent_line is not None and parent_line < 1:
+        raise CommandCenterError("Work parent line must be positive.")
     calendar_name = "Work"
     sync_provider = "calendar"
     calendar_uid = add_calendar_todo(
@@ -3360,17 +3409,60 @@ def add_work_task(vault: Path, title: str, task_date: str) -> dict[str, Any]:
         if note.exists():
             content = note.read_text(encoding="utf-8").rstrip()
         else:
+            if parent_line is not None:
+                raise CommandCenterError(
+                    "Work parent line requires an existing Daily Note."
+                )
             note.parent.mkdir(parents=True, exist_ok=True)
             content = ""
-        atomic_write(
-            note,
-            append_line_to_section(content, "Command Center", line),
-        )
+        if parent_line is None:
+            atomic_write(
+                note,
+                append_line_to_section(content, "Command Center", line),
+            )
+        else:
+            lines = content.splitlines()
+            parent_index = parent_line - 1
+            if parent_index < 0 or parent_index >= len(lines):
+                raise CommandCenterError("Work parent line is out of range.")
+            parent_match = WORK_TASK_PATTERN.match(lines[parent_index])
+            if (
+                not parent_match
+                or parent_match.group("state").lower() == "x"
+            ):
+                raise CommandCenterError(
+                    "Work parent must be an open daily task."
+                )
+            parent_indent = (
+                len(lines[parent_index])
+                - len(lines[parent_index].lstrip(" \t"))
+            )
+            insertion = parent_index + 1
+            while insertion < len(lines):
+                candidate = WORK_TASK_PATTERN.match(lines[insertion])
+                if candidate:
+                    indent = (
+                        len(lines[insertion])
+                        - len(lines[insertion].lstrip(" \t"))
+                    )
+                    if indent <= parent_indent:
+                        break
+                insertion += 1
+            leading = lines[parent_index][
+                : len(lines[parent_index])
+                - len(lines[parent_index].lstrip(" \t"))
+            ]
+            nested_line = (
+                f"{leading}\t- [ ] {normalized_title}"
+                f"{calendar_metadata(calendar_name, calendar_uid, sync_provider)}"
+            )
+            lines.insert(insertion, nested_line)
+            atomic_write(note, "\n".join(lines).rstrip() + "\n")
     audit_event(
         "added",
         "work-task",
         normalized_title,
-        {"date": task_date},
+        {"date": task_date, "parent_line": parent_line},
     )
     return {
         "title": normalized_title,
@@ -3379,6 +3471,7 @@ def add_work_task(vault: Path, title: str, task_date: str) -> dict[str, Any]:
         "calendar": calendar_name,
         "calendar_uid": calendar_uid,
         "sync_provider": sync_provider,
+        "parent_line": parent_line,
     }
 
 
@@ -3392,7 +3485,7 @@ def complete_work_task(
         if not task.completed
         and (task_date is None or task.task_date == task_date)
         and (
-            task.managed
+            (task.managed and normalized in task.title.casefold())
             or task.title.casefold() == normalized
         )
     ]
@@ -4658,6 +4751,7 @@ def build_parser() -> argparse.ArgumentParser:
     task_add.add_argument("--area", choices=["Personal", "Work"])
     task_add.add_argument("--project")
     task_add.add_argument("--date")
+    task_add.add_argument("--parent-line", type=int)
 
     task_complete = commands.add_parser("task-complete")
     task_complete.add_argument("--query", required=True)
@@ -4763,6 +4857,7 @@ def build_parser() -> argparse.ArgumentParser:
     work_task_add = commands.add_parser("work-task-add")
     work_task_add.add_argument("--title", required=True)
     work_task_add.add_argument("--date", required=True)
+    work_task_add.add_argument("--parent-line", type=int)
     work_task_complete = commands.add_parser("work-task-complete")
     work_task_complete.add_argument("--query", required=True)
     work_task_complete.add_argument("--date")
@@ -4867,6 +4962,7 @@ def main() -> None:
                     args.area,
                     args.project,
                     args.date,
+                    args.parent_line,
                 )
             )
         elif args.command == "task-complete":
@@ -4996,7 +5092,14 @@ def main() -> None:
         elif args.command == "search":
             emit({"results": search_all(vault, args.query, args.limit)})
         elif args.command == "work-task-add":
-            emit(add_work_task(vault, args.title, args.date))
+            emit(
+                add_work_task(
+                    vault,
+                    args.title,
+                    args.date,
+                    args.parent_line,
+                )
+            )
         elif args.command == "work-task-complete":
             emit(complete_work_task(vault, args.query, args.date))
         elif args.command == "work-task-reopen":

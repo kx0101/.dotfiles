@@ -211,15 +211,20 @@ def command_arguments(command: dict[str, Any]) -> tuple[str, ...]:
         arguments = ["task-add", "--title", title, "--area", "Personal"]
         if task_date:
             arguments.extend(["--date", task_date])
+        if payload.get("parent_line") is not None:
+            arguments.extend(["--parent-line", str(payload["parent_line"])])
         return tuple(arguments)
     if action == "add-work-task":
-        return (
+        arguments = [
             "work-task-add",
             "--title",
             title,
             "--date",
             task_date,
-        )
+        ]
+        if payload.get("parent_line") is not None:
+            arguments.extend(["--parent-line", str(payload["parent_line"])])
+        return tuple(arguments)
     if action == "add-reminder":
         arguments = [
             "reminder-add",
@@ -248,6 +253,18 @@ def command_arguments(command: dict[str, Any]) -> tuple[str, ...]:
         if url:
             arguments.extend(["--url", url])
         return tuple(arguments)
+    if action == "add-project-note":
+        return (
+            "project-record",
+            "--name",
+            str(payload.get("project") or ""),
+            "--kind",
+            "note",
+            "--text",
+            title,
+            "--source",
+            "Command Center Vercel",
+        )
     if action == "complete-personal-task":
         return (
             "task-complete",

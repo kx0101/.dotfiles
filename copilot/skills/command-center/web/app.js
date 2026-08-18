@@ -473,7 +473,38 @@ function renderTasks() {
   if (!state.tasks) return;
   renderTaskTree("#work-tree", state.tasks.work ?? [], "Work");
   renderTaskTree("#personal-tasks", state.tasks.personal ?? [], "Personal");
+  renderCaptureParents();
   applyVisibility();
+}
+
+function renderCaptureParents() {
+  const select = $("#capture-parent");
+  const selected = select.value;
+  select.replaceChildren(new Option("Νέο parent", ""));
+  const kind = $("#capture-kind").value;
+  const now = new Date();
+  const today = new Date(
+    now.getTime() - now.getTimezoneOffset() * 60_000,
+  )
+    .toISOString()
+    .slice(0, 10);
+  if (
+    !["personal-task", "work-task"].includes(kind) ||
+    $("#capture-date").value !== today
+  ) {
+    return;
+  }
+  const items =
+    kind === "work-task"
+      ? state.tasks?.work ?? []
+      : state.tasks?.personal ?? [];
+  for (const item of items.filter((task) => !task.completed)) {
+    const label = [...(item.parent_path ?? []), item.title].join(" → ");
+    select.append(new Option(label, String(item.line_number)));
+  }
+  if ([...select.options].some((option) => option.value === selected)) {
+    select.value = selected;
+  }
 }
 
 function detailSection(title, content) {
@@ -942,10 +973,13 @@ function updateCaptureFields() {
   const dated = new Set(["personal-task", "work-task", "reminder"]).has(kind);
   const learning = new Set(["book", "article", "video"]).has(kind);
   const projectAware = learning || kind === "project-note";
+  const todo = ["personal-task", "work-task"].includes(kind);
   $("#capture-date").classList.toggle("hidden", !dated);
   $("#capture-url").classList.toggle("hidden", !learning);
   $("#capture-project").classList.toggle("hidden", !projectAware);
   $("#capture-project").required = kind === "project-note";
+  $("#capture-parent").classList.toggle("hidden", !todo);
+  renderCaptureParents();
 }
 
 async function addCapture(event) {
@@ -957,6 +991,7 @@ async function addCapture(event) {
   const captureDate = $("#capture-date").value;
   const url = $("#capture-url").value.trim();
   const project = $("#capture-project").value;
+  const parentLine = $("#capture-parent").value;
   setStatus("Καταγραφή…");
   try {
     await mutate("/api/capture", {
@@ -965,6 +1000,7 @@ async function addCapture(event) {
       date: captureDate,
       url,
       project,
+      parent_line: parentLine ? Number(parentLine) : null,
     });
     $("#capture-title").value = "";
     $("#capture-url").value = "";
@@ -1183,6 +1219,7 @@ function initialize() {
   $("#scratchpad").addEventListener("input", scheduleScratchpadSave);
   $("#clear-scratchpad").addEventListener("click", clearScratchpad);
   $("#capture-kind").addEventListener("change", updateCaptureFields);
+  $("#capture-date").addEventListener("change", renderCaptureParents);
   document.querySelectorAll(".learning-tab").forEach((tab) => {
     tab.addEventListener("click", () => {
       state.learningKind = tab.dataset.kind;

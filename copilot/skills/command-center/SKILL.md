@@ -90,6 +90,8 @@ email activity, BookIt billing, calendar names, and project operational metadata
 It never includes Mail bodies, complete Work notes, local paths, or credentials.
 Allowlisted mutations are executed locally through the CLI. Apple Health uses a
 separate owner-only table and restricted ingest token.
+Vercel project-note capture must use `project-record`; project history remains
+append-only.
 
 Show the briefing modal only on the first browser open of each day. Surface sync
 status and the append-only audit timeline. Daily history uses owner-only Supabase
@@ -129,6 +131,8 @@ undated Work inbox tasks. Dated Work tasks live in the matching Work Daily Note.
   ask the user to choose.
 - Preserve the Work checkbox tree in output. Show every open parent and child in
   source order, with each child indented exactly one level below its parent.
+- Todo capture may choose an open daily parent. Pass its stable line number to
+  `task-add` or `work-task-add`; no parent creates a root todo.
 
 Daily task files are generated per date under
 `Command Center/Daily Tasks/<N. Month YYYY>/` for Personal and

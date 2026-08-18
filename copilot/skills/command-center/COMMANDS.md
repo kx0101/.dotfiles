@@ -129,6 +129,12 @@ python3 scripts/command_center.py task-add \
   --title "Να διορθώσω το checkout" \
   --project BookIt
 
+python3 scripts/command_center.py task-add \
+  --title "Να γράψω integration test" \
+  --area Personal \
+  --date 2026-08-19 \
+  --parent-line 4
+
 python3 scripts/command_center.py task-complete \
   --query "τιμολόγια της Meta"
 
@@ -215,6 +221,11 @@ python3 scripts/command_center.py work-read \
 python3 scripts/command_center.py work-task-add \
   --title "Να ελέγξω το PR" \
   --date 2026-08-19
+
+python3 scripts/command_center.py work-task-add \
+  --title "Να διορθώσω τα σχόλια" \
+  --date 2026-08-19 \
+  --parent-line 12
 
 python3 scripts/command_center.py work-task-complete \
   --query "ελέγξω το PR" \

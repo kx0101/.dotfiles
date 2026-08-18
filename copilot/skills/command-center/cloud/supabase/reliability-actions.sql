@@ -9,6 +9,7 @@ alter table public.command_center_commands
       'add-reminder',
       'add-learning',
       'add-calendar-event',
+      'add-project-note',
       'complete-personal-task',
       'complete-work-task',
       'complete-reminder',

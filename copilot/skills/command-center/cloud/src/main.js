@@ -284,6 +284,19 @@ function renderProjects(projects) {
     return lifecycle || first.name.localeCompare(second.name, "el");
   });
   const container = $("#projects");
+  const projectSelect = $("#capture-project");
+  const selectedProject = projectSelect.value;
+  projectSelect.replaceChildren(new Option("Χωρίς έργο", ""));
+  for (const project of sorted) {
+    projectSelect.append(new Option(project.name, project.name));
+  }
+  if (
+    [...projectSelect.options].some(
+      (option) => option.value === selectedProject,
+    )
+  ) {
+    projectSelect.value = selectedProject;
+  }
   container.replaceChildren();
   if (!sorted.length) {
     empty(container);
@@ -298,6 +311,31 @@ function renderProjects(projects) {
     );
     card.addEventListener("click", () => openProject(project));
     container.append(card);
+  }
+}
+
+function renderCaptureParents() {
+  const select = $("#capture-parent");
+  const selected = select.value;
+  select.replaceChildren(new Option("Νέο parent", ""));
+  const kind = $("#capture-kind").value;
+  if (
+    !["personal-task", "work-task"].includes(kind) ||
+    $("#capture-date").value !== localDate() ||
+    isHistorical()
+  ) {
+    return;
+  }
+  const items =
+    kind === "work-task"
+      ? snapshotPayload.work_tasks ?? []
+      : snapshotPayload.personal_tasks ?? [];
+  for (const item of items.filter((task) => !task.completed)) {
+    const label = [...(item.parent_path ?? []), item.title].join(" → ");
+    select.append(new Option(label, String(item.line_number)));
+  }
+  if ([...select.options].some((option) => option.value === selected)) {
+    select.value = selected;
   }
 }
 
@@ -657,6 +695,7 @@ function renderSnapshot(snapshot) {
   renderMail(snapshotPayload.mail ?? []);
   renderLearning(learning);
   renderProjects(snapshotPayload.projects ?? []);
+  renderCaptureParents();
   renderCalendars(snapshotPayload.calendars ?? []);
   renderAudit(snapshotPayload.audit ?? []);
   setStatus(
@@ -915,8 +954,14 @@ async function saveEdit(event) {
 function updateCaptureFields() {
   const kind = $("#capture-kind").value;
   const learning = ["book", "article", "video"].includes(kind);
+  const todo = ["personal-task", "work-task"].includes(kind);
+  const projectNote = kind === "project-note";
   $("#capture-url").classList.toggle("hidden", !learning);
   $("#capture-date").classList.toggle("hidden", learning);
+  $("#capture-project").classList.toggle("hidden", !projectNote);
+  $("#capture-project").required = projectNote;
+  $("#capture-parent").classList.toggle("hidden", !todo);
+  renderCaptureParents();
 }
 
 async function capture(event) {
@@ -925,22 +970,29 @@ async function capture(event) {
   const button = event.submitter ?? $("#capture-form button[type='submit']");
   button.disabled = true;
   const kind = $("#capture-kind").value;
-  const action =
-    kind === "personal-task"
-      ? "add-personal-task"
-      : kind === "work-task"
-        ? "add-work-task"
-      : kind === "reminder"
-        ? "add-reminder"
-        : "add-learning";
+  const action = {
+    "personal-task": "add-personal-task",
+    "work-task": "add-work-task",
+    reminder: "add-reminder",
+    book: "add-learning",
+    article: "add-learning",
+    video: "add-learning",
+    "project-note": "add-project-note",
+  }[kind];
   const payload = {
     title: $("#capture-title").value.trim(),
     date: $("#capture-date").value || null,
+    parent_line: $("#capture-parent").value
+      ? Number($("#capture-parent").value)
+      : null,
   };
   if (action === "add-learning") {
     payload.kind = kind;
     const url = $("#capture-url").value.trim();
     if (url) payload.url = url;
+  }
+  if (action === "add-project-note") {
+    payload.project = $("#capture-project").value;
   }
   try {
     await enqueue(action, payload);
@@ -1205,6 +1257,7 @@ async function initialize() {
   $("#refresh").addEventListener("click", refresh);
   $("#capture-form").addEventListener("submit", capture);
   $("#capture-kind").addEventListener("change", updateCaptureFields);
+  $("#capture-date").addEventListener("change", renderCaptureParents);
   $("#scratchpad").addEventListener("input", scheduleScratchpadSave);
   $("#clear-scratchpad").addEventListener("click", () => {
     clearScratchpad().catch((error) => {

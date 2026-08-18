@@ -72,6 +72,11 @@ Task and Reminder rows support title/date editing. Local writes call CLI update
 commands directly; Vercel writes enter the allowlisted queue and use pending
 overlays so refresh does not revert optimistic UI state.
 
+Todo capture may target an open parent by stable daily-file line number. No
+selection creates a new root parent. Personal task storage remains flat in
+`Tasks.md`; the daily file preserves the selected hierarchy and carries it
+forward. Vercel project-note capture routes to append-only `project-record`.
+
 ## Cloud synchronization
 
 Supabase uses GitHub OAuth. Client and RLS are gated to the configured owner UUID.
@@ -95,10 +100,12 @@ logs, and credentials.
 Allowlisted cloud writes:
 
 - add/complete Personal and Work tasks;
+- add root or nested Personal/Work tasks;
 - add/complete reminders;
 - add/complete Learning;
 - create Calendar events.
 - update/reschedule Personal/Work tasks and Reminders.
+- append project notes.
 
 Pending/processing commands overlay the Vercel snapshot so a refresh does not
 temporarily revert checked UI state.

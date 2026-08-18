@@ -283,6 +283,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
             capture_date = str(payload.get("date") or "").strip()
             project = str(payload.get("project") or "").strip()
             url = str(payload.get("url") or "").strip()
+            parent_line = payload.get("parent_line")
+            if parent_line is not None and (
+                not isinstance(parent_line, int) or parent_line < 1
+            ):
+                self._send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {"error": "Parent line must be a positive integer."},
+                )
+                return
             valid_kinds = {
                 "personal-task",
                 "work-task",
@@ -309,12 +318,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 command = ["task-add", "--title", title, "--area", "Personal"]
                 if capture_date:
                     command.extend(["--date", capture_date])
+                if parent_line is not None:
+                    command.extend(["--parent-line", str(parent_line)])
             elif capture_kind == "work-task":
                 command = (
                     ["work-task-add", "--title", title, "--date", capture_date]
                     if capture_date
                     else ["task-add", "--title", title, "--area", "Work"]
                 )
+                if parent_line is not None:
+                    command.extend(["--parent-line", str(parent_line)])
             elif capture_kind == "reminder":
                 command = [
                     "reminder-add",

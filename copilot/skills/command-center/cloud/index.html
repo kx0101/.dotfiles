@@ -50,13 +50,13 @@
             required
           >
           <select id="capture-kind" name="kind" aria-label="Τύπος capture">
-            <option value="personal-task">Προσωπική εργασία</option>
-            <option value="work-task">Εργασία δουλειάς</option>
+            <option value="personal-task">Todo · Personal</option>
+            <option value="work-task">Todo · Work</option>
             <option value="reminder">Υπενθύμιση</option>
             <option value="book">Βιβλίο</option>
             <option value="article">Άρθρο</option>
             <option value="video">Βίντεο</option>
-            <option value="project-note" disabled>Σημείωση έργου</option>
+            <option value="project-note">Σημείωση έργου</option>
           </select>
           <input id="capture-date" name="date" type="date">
           <input
@@ -74,6 +74,14 @@
             aria-label="Project"
           >
             <option value="">Χωρίς έργο</option>
+          </select>
+          <select
+            id="capture-parent"
+            class="hidden"
+            name="parent"
+            aria-label="Parent todo"
+          >
+            <option value="">Νέο parent</option>
           </select>
           <button type="submit">Καταγραφή</button>
       </form>
