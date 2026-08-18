@@ -86,6 +86,8 @@ Closing it stores the date in browser local storage. The date navigator switches
 to owner-only historical snapshots; past dates are read-only. Future dates use
 the current 30-day Calendar plan, open Reminders, and existing Personal/Work
 daily files, so scheduled events appear before that day's snapshot exists.
+The header **Briefing** button opens the same modal on demand for the currently
+selected day without changing the once-per-day automatic-open preference.
 
 Task and Reminder rows support title/date editing. Local writes call CLI update
 commands directly; Vercel writes enter the allowlisted queue and use pending

@@ -1217,14 +1217,19 @@ function briefingSection(title, items) {
   return section;
 }
 
-function maybeShowBriefing() {
+function showBriefing(force = false) {
   const now = new Date();
   const day = new Date(
     now.getTime() - now.getTimezoneOffset() * 60_000,
   )
     .toISOString()
     .slice(0, 10);
-  if (localStorage.getItem("command-center-briefing-date") === day) return;
+  if (
+    !force &&
+    localStorage.getItem("command-center-briefing-date") === day
+  ) {
+    return;
+  }
   const content = $("#briefing-content");
   content.replaceChildren(
     briefingSection(
@@ -1250,6 +1255,10 @@ function maybeShowBriefing() {
   );
   const dialog = $("#briefing-dialog");
   if (!dialog.open) dialog.showModal();
+}
+
+function maybeShowBriefing() {
+  showBriefing(false);
 }
 
 async function refresh() {
@@ -1324,6 +1333,7 @@ function initialize() {
   }
 
   $("#refresh").addEventListener("click", refresh);
+  $("#open-briefing").addEventListener("click", () => showBriefing(true));
   $("#open-search").addEventListener("click", openSearch);
   $("#search-form").addEventListener("submit", searchAll);
   $("#close-search").addEventListener("click", () => {

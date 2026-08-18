@@ -1983,10 +1983,15 @@ function briefingSection(title, items) {
   return section;
 }
 
-function maybeShowBriefing() {
-  if (selectedDate !== localDate()) return;
+function showBriefing(force = false) {
+  if (!force && selectedDate !== localDate()) return;
   const day = localDate();
-  if (localStorage.getItem("command-center-briefing-date") === day) return;
+  if (
+    !force &&
+    localStorage.getItem("command-center-briefing-date") === day
+  ) {
+    return;
+  }
   const content = $("#briefing-content");
   content.replaceChildren(
     briefingSection(
@@ -2012,6 +2017,10 @@ function maybeShowBriefing() {
   );
   const dialog = $("#briefing-dialog");
   if (!dialog.open) dialog.showModal();
+}
+
+function maybeShowBriefing() {
+  showBriefing(false);
 }
 
 async function refresh() {
@@ -2129,6 +2138,7 @@ async function initialize() {
     return;
   }
   $("#refresh").addEventListener("click", refresh);
+  $("#open-briefing").addEventListener("click", () => showBriefing(true));
   $("#capture-form").addEventListener("submit", capture);
   $("#capture-kind").addEventListener("change", configureCaptureSubtype);
   $("#capture-subtype").addEventListener("change", updateCaptureFields);
