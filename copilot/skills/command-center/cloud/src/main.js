@@ -822,7 +822,7 @@ function renderSnapshot(snapshot) {
   setStatus(
     snapshot
       ? `Ενημερώθηκε ${new Date(snapshot.updated_at).toLocaleString("el-GR")}`
-      : "Δεν υπάρχει ακόμη snapshot από το Mac.",
+      : "Δεν υπάρχει ακόμη στιγμιότυπο από το Mac.",
   );
 }
 
@@ -1356,8 +1356,8 @@ async function refresh() {
     $("#history-mode").textContent = `Στιγμιότυπο ${selectedDate}`;
     setStatus(
       snapshot
-        ? `Ιστορικό snapshot ${selectedDate}`
-        : `Δεν υπάρχει snapshot για ${selectedDate}`,
+        ? `Ιστορικό στιγμιότυπο ${selectedDate}`
+        : `Δεν υπάρχει στιγμιότυπο για ${selectedDate}`,
     );
   } else {
     $("#scratchpad").readOnly = false;

@@ -49,6 +49,10 @@ deduplicated items. Personal task add/complete/reschedule updates Tasks, daily
 files, and Reminders. Dated Work mutations update the Daily Note and Work
 Calendar.
 
+Inline `<!-- calendar: ... -->` blocks are machine metadata linking a Markdown
+todo to its exact Calendar/Reminder item. Obsidian hides them in Reading/Live
+Preview. Keep them intact; Source mode shows them by design.
+
 ## Web apps
 
 - Local: <http://127.0.0.1:4317>

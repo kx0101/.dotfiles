@@ -380,6 +380,13 @@ def task_relation(action_date: str | None, completed: bool) -> str:
     return "future"
 
 
+def reconcile_next_day(vault: Path, task_date: str | None) -> None:
+    if not task_date:
+        return
+    next_date = date.fromisoformat(task_date) + timedelta(days=1)
+    daily_rollover(vault, next_date.isoformat())
+
+
 def parse_tasks(tasks_path: Path) -> list[Task]:
     if not tasks_path.is_file():
         raise CommandCenterError(f"Tasks file does not exist: {tasks_path}")
@@ -734,6 +741,7 @@ def add_task(
         title,
         {"area": section, "date": action_date, "parent_line": parent_line},
     )
+    reconcile_next_day(vault, action_date)
     return {
         "title": title,
         "section": section,
@@ -823,6 +831,7 @@ def complete_task(
         task.title,
         {"area": task.section, "date": task.action_date},
     )
+    reconcile_next_day(vault, task.action_date)
     return {
         "title": task.title,
         "section": task.section,
@@ -885,6 +894,7 @@ def reopen_task(
         task.title,
         {"area": task.section, "date": action_date},
     )
+    reconcile_next_day(vault, action_date)
     return {
         "title": task.title,
         "section": task.section,
@@ -955,6 +965,7 @@ def delete_task(
         task.title,
         {"area": task.section, "date": action_date},
     )
+    reconcile_next_day(vault, action_date)
     return {
         "title": task.title,
         "section": task.section,
@@ -1022,6 +1033,8 @@ def reschedule_task(vault: Path, query: str, action_date: str) -> dict[str, Any]
             "to_date": action_date,
         },
     )
+    reconcile_next_day(vault, task.action_date)
+    reconcile_next_day(vault, action_date)
     return {
         "title": task.title,
         "section": task.section,
@@ -1097,6 +1110,9 @@ def update_task(
             "to_date": new_date,
         },
     )
+    reconcile_next_day(vault, current_date)
+    if new_date != current_date:
+        reconcile_next_day(vault, new_date)
     return {
         "title": new_title,
         "old_title": task.title,
@@ -3307,18 +3323,32 @@ def section_uses_personal_daily(vault: Path, section: str) -> bool:
 def open_daily_lines(path: Path) -> list[str]:
     if not path.is_file():
         return []
-    lines: list[str] = []
-    seen: set[str] = set()
-    for line in path.read_text(encoding="utf-8").splitlines():
-        match = DAILY_TASK_PATTERN.match(line)
-        if not match or match.group("state").lower() == "x":
+    entries = daily_task_entries(path)
+    open_paths = {
+        entry["path_key"]
+        for entry in entries
+        if not entry["completed"] and not entry["deleted"]
+    }
+    carried: list[str] = []
+    seen: set[tuple[str, ...]] = set()
+    for entry in entries:
+        has_open_descendant = any(
+            len(path_key) > len(entry["path_key"])
+            and path_key[: len(entry["path_key"])] == entry["path_key"]
+            for path_key in open_paths
+        )
+        if (
+            entry["deleted"]
+            or (entry["completed"] and not has_open_descendant)
+            or entry["path_key"] in seen
+        ):
             continue
-        key = " ".join(line.split()).casefold()
-        if key in seen:
-            continue
-        seen.add(key)
-        lines.append(line)
-    return lines
+        line = entry["raw"]
+        if entry["completed"]:
+            line = re.sub(r"\[[xX]\]", "[ ]", line, count=1)
+        carried.append(line)
+        seen.add(entry["path_key"])
+    return carried
 
 
 def daily_line_identity(line: str) -> str | None:
@@ -3344,29 +3374,137 @@ def merge_daily_lines(
             for line in lines
             if (identity := daily_line_identity(line))
         }
-        missing = [
-            line
-            for line in carried_lines
-            if (identity := daily_line_identity(line))
-            and identity not in existing
-        ]
-        if not missing:
-            return 0
-        if personal:
-            insertion = 2 if lines and lines[0].startswith("# ") else 0
-        else:
-            insertion = next(
-                (
-                    index
-                    for index, line in enumerate(lines)
-                    if line == "## Command Center"
-                ),
-                len(lines),
+        inserted = 0
+        for carried_index, carried_line in enumerate(carried_lines):
+            identity = daily_line_identity(carried_line)
+            if not identity or identity in existing:
+                continue
+            carried_indent = (
+                len(carried_line) - len(carried_line.lstrip(" \t"))
             )
-        block = missing + [""]
-        lines[insertion:insertion] = block
+            insertion = None
+            for previous_line in reversed(carried_lines[:carried_index]):
+                previous_identity = daily_line_identity(previous_line)
+                if not previous_identity or previous_identity not in existing:
+                    continue
+                previous_index = next(
+                    (
+                        index
+                        for index, line in enumerate(lines)
+                        if daily_line_identity(line) == previous_identity
+                    ),
+                    None,
+                )
+                if previous_index is None:
+                    continue
+                previous_indent = (
+                    len(lines[previous_index])
+                    - len(lines[previous_index].lstrip(" \t"))
+                )
+                insertion = previous_index + 1
+                if carried_indent <= previous_indent:
+                    while insertion < len(lines):
+                        candidate = DAILY_TASK_PATTERN.match(lines[insertion])
+                        if candidate:
+                            indent = (
+                                len(lines[insertion])
+                                - len(lines[insertion].lstrip(" \t"))
+                            )
+                            if indent <= previous_indent:
+                                break
+                        insertion += 1
+                break
+            if insertion is None:
+                insertion = (
+                    2
+                    if personal and lines and lines[0].startswith("# ")
+                    else next(
+                        (
+                            index
+                            for index, line in enumerate(lines)
+                            if line == "## Command Center"
+                        ),
+                        len(lines),
+                    )
+                )
+            lines.insert(insertion, carried_line)
+            existing.add(identity)
+            inserted += 1
+        if not inserted:
+            return 0
         atomic_write(path, "\n".join(lines).rstrip() + "\n")
-    return len(missing)
+    return inserted
+
+
+def daily_task_entries(path: Path) -> list[dict[str, Any]]:
+    if not path.is_file():
+        return []
+    entries: list[dict[str, Any]] = []
+    hierarchy: list[tuple[int, str]] = []
+    for index, line in enumerate(path.read_text(encoding="utf-8").splitlines()):
+        match = DAILY_TASK_PATTERN.match(line)
+        if not match:
+            continue
+        indent = len(line) - len(line.lstrip(" \t"))
+        while hierarchy and indent <= hierarchy[-1][0]:
+            hierarchy.pop()
+        title = CALENDAR_METADATA_PATTERN.sub(
+            "",
+            match.group("title"),
+        ).strip()
+        deleted = title.endswith("→ διαγράφηκε")
+        title = re.sub(
+            r"\s+→\s+(?:μεταφέρθηκε\s+\d{4}-\d{2}-\d{2}|διαγράφηκε)$",
+            "",
+            title,
+        )
+        path_key = tuple([*(title for _, title in hierarchy), title])
+        entries.append(
+            {
+                "line_number": index + 1,
+                "title": title,
+                "path_key": path_key,
+                "completed": match.group("state").lower() == "x",
+                "deleted": deleted,
+                "raw": line,
+            }
+        )
+        hierarchy.append((indent, title))
+    return entries
+
+
+def remove_completed_carryovers(source: Path, target: Path) -> int:
+    if not source.is_file() or not target.is_file():
+        return 0
+    source_entries = daily_task_entries(source)
+    open_paths = {
+        entry["path_key"]
+        for entry in source_entries
+        if not entry["completed"] and not entry["deleted"]
+    }
+    completed_paths = {
+        entry["path_key"]
+        for entry in source_entries
+        if entry["completed"]
+        and not any(
+            len(path_key) > len(entry["path_key"])
+            and path_key[: len(entry["path_key"])] == entry["path_key"]
+            for path_key in open_paths
+        )
+    }
+    removable = [
+        entry["line_number"]
+        for entry in daily_task_entries(target)
+        if not entry["completed"] and entry["path_key"] in completed_paths
+    ]
+    if not removable:
+        return 0
+    with path_lock(target):
+        lines = target.read_text(encoding="utf-8").splitlines()
+        for line_number in sorted(removable, reverse=True):
+            lines.pop(line_number - 1)
+        atomic_write(target, "\n".join(lines).rstrip() + "\n")
+    return len(removable)
 
 
 def ensure_personal_daily_file(vault: Path, target_date: date) -> tuple[Path, bool]:
@@ -3596,6 +3734,10 @@ def daily_rollover(vault: Path, target_date: str) -> dict[str, Any]:
         open_daily_lines(personal_daily_path(vault, previous)),
         personal=True,
     )
+    personal_removed = remove_completed_carryovers(
+        personal_daily_path(vault, previous),
+        personal_path,
+    )
     if personal_created:
         lines = open_daily_lines(personal_path)
         if not lines:
@@ -3614,12 +3756,13 @@ def daily_rollover(vault: Path, target_date: str) -> dict[str, Any]:
                 "carried": len(lines),
             }
         )
-    elif personal_carried:
+    elif personal_carried or personal_removed:
         created["created"].append(
             {
                 "area": "Personal",
                 "path": str(personal_path.relative_to(vault)),
                 "carried": personal_carried,
+                "removed": personal_removed,
                 "merged": True,
             }
         )
@@ -3633,12 +3776,17 @@ def daily_rollover(vault: Path, target_date: str) -> dict[str, Any]:
         open_daily_lines(work_daily_path(vault, previous)),
         personal=False,
     )
-    if work_created or work_carried:
+    work_removed = remove_completed_carryovers(
+        work_daily_path(vault, previous),
+        work_path,
+    )
+    if work_created or work_carried or work_removed:
         created["created"].append(
             {
                 "area": "Work",
                 "path": str(work_path.relative_to(vault)),
                 "carried": work_carried,
+                "removed": work_removed,
                 "merged": not work_created,
             }
         )
@@ -3847,6 +3995,7 @@ def add_work_task(
         normalized_title,
         {"date": task_date, "parent_line": parent_line},
     )
+    reconcile_next_day(vault, task_date)
     return {
         "title": normalized_title,
         "date": task_date,
@@ -3906,6 +4055,7 @@ def complete_work_task(
         task.title,
         {"date": task.task_date},
     )
+    reconcile_next_day(vault, task.task_date)
     return asdict(task) | {"completed": True}
 
 
@@ -3956,6 +4106,7 @@ def reopen_work_task(
         task.title,
         {"date": task_date},
     )
+    reconcile_next_day(vault, task_date)
     return asdict(task) | {"completed": False}
 
 
@@ -4009,6 +4160,7 @@ def delete_work_task(
         task.title,
         {"date": task_date},
     )
+    reconcile_next_day(vault, task_date)
     return {
         "title": task.title,
         "status": "deleted",
@@ -4097,6 +4249,8 @@ def reschedule_work_task(
         task.title,
         {"from_date": task.task_date, "to_date": task_date},
     )
+    reconcile_next_day(vault, task.task_date)
+    reconcile_next_day(vault, task_date)
     return {
         "title": task.title,
         "from": task.task_date,
@@ -4197,6 +4351,9 @@ def update_work_task(
             "to_date": new_date,
         },
     )
+    reconcile_next_day(vault, current_date)
+    if new_date != current_date:
+        reconcile_next_day(vault, new_date)
     return {
         "title": new_title,
         "old_title": task.title,
