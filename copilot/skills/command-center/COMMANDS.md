@@ -13,6 +13,8 @@ errors are written to stderr as JSON and exit non-zero.
 
 ```bash
 python3 scripts/command_center.py dashboard
+python3 scripts/command_center.py home
+python3 scripts/command_center.py home --include-personal --include-work
 python3 scripts/command_center.py task-list --view action
 python3 scripts/command_center.py task-list --view today
 python3 scripts/command_center.py task-list --view overdue

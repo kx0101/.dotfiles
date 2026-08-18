@@ -2799,6 +2799,27 @@ def dashboard(vault: Path) -> dict[str, Any]:
     return payload
 
 
+def home(
+    vault: Path,
+    include_personal: bool,
+    include_work: bool,
+) -> dict[str, Any]:
+    daily_tasks: dict[str, Any] = {}
+    if include_personal:
+        daily_tasks["personal"] = list_tasks(vault, "today", None)
+    if include_work:
+        daily_tasks["work"] = work_briefing(vault)["today"]
+    return {
+        "morning": dashboard(vault),
+        "weekly": weekly_review(vault),
+        "daily_tasks": daily_tasks,
+        "daily_tasks_included": {
+            "personal": include_personal,
+            "work": include_work,
+        },
+    }
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = JsonArgumentParser(description="Obsidian command-center helper")
     parser.add_argument("--vault", help="Override the Obsidian vault path")
@@ -2937,6 +2958,9 @@ def build_parser() -> argparse.ArgumentParser:
     resend_parser.add_argument("--limit", type=int, default=5)
     commands.add_parser("weekly-review")
     commands.add_parser("dashboard")
+    home_parser = commands.add_parser("home")
+    home_parser.add_argument("--include-personal", action="store_true")
+    home_parser.add_argument("--include-work", action="store_true")
     return parser
 
 
@@ -3092,6 +3116,8 @@ def main() -> None:
             emit(weekly_review(vault))
         elif args.command == "dashboard":
             emit(dashboard(vault))
+        elif args.command == "home":
+            emit(home(vault, args.include_personal, args.include_work))
         else:
             parser.error(f"Unknown command: {args.command}")
     except CommandCenterError as exc:
