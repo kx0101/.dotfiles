@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import fcntl
 import re
 import subprocess
 import sys
@@ -16,6 +17,13 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent
 COMMAND = ROOT / "command_center.py"
+LOCK_PATH = (
+    Path.home()
+    / "Library"
+    / "Application Support"
+    / "Command Center"
+    / "cloud-sync.lock"
+)
 UUID_PATTERN = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
     r"[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
@@ -507,10 +515,17 @@ def process_commands(
 
 
 def main() -> None:
-    base_url, service_key, user_id = configuration()
-    processed = process_commands(base_url, service_key, user_id)
-    push_snapshot(base_url, service_key, user_id)
-    print(json.dumps({"processed": processed, "snapshot": "updated"}))
+    LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with LOCK_PATH.open("a", encoding="utf-8") as lock_file:
+        try:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            print(json.dumps({"processed": 0, "snapshot": "skipped_locked"}))
+            return
+        base_url, service_key, user_id = configuration()
+        processed = process_commands(base_url, service_key, user_id)
+        push_snapshot(base_url, service_key, user_id)
+        print(json.dumps({"processed": processed, "snapshot": "updated"}))
 
 
 if __name__ == "__main__":

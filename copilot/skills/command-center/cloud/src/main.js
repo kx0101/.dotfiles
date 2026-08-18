@@ -86,9 +86,11 @@ function renderTasks(selector, items, action) {
     const area =
       action === "complete-work-task" ? "work" : "personal";
     const entityKey = taskEntityKey(area, item);
-    const locked = pendingCommands.some(
-      (command) => command.entity_key === entityKey,
-    );
+    const locked =
+      item.pending === true ||
+      pendingCommands.some(
+        (command) => command.entity_key === entityKey,
+      );
     const row = element(
       "label",
       `task-row${item.completed ? " completed" : ""}`,
@@ -237,9 +239,11 @@ function renderReminders(items) {
   }
   for (const item of items) {
     const entityKey = reminderEntityKey(item);
-    const locked = pendingCommands.some(
-      (command) => command.entity_key === entityKey,
-    );
+    const locked =
+      item.pending === true ||
+      pendingCommands.some(
+        (command) => command.entity_key === entityKey,
+      );
     const row = element("label", "reminder-row");
     const checkbox = element("input");
     checkbox.type = "checkbox";
@@ -299,9 +303,11 @@ function renderLearning(items) {
   }
   for (const item of filtered) {
     const entityKey = `learning:${item.id}`;
-    const locked = pendingCommands.some(
-      (command) => command.entity_key === entityKey,
-    );
+    const locked =
+      item.pending === true ||
+      pendingCommands.some(
+        (command) => command.entity_key === entityKey,
+      );
     const row = element("article", "learning-row");
     if (locked) row.classList.add("pending");
     const copy = element("div", "learning-copy");
@@ -788,8 +794,34 @@ function renderSnapshot(snapshot) {
       if (command.payload.date !== item.task_date) return [];
       return [{ ...item, title: command.payload.title }];
     });
+  const withPendingAdds = (items, action) => {
+    const result = [...items];
+    for (const command of pendingCommands.filter(
+      (entry) => entry.action === action,
+    )) {
+      const exists = result.some(
+        (item) =>
+          item.title === command.payload.title &&
+          item.task_date === command.payload.date,
+      );
+      if (!exists) {
+        result.push({
+          title: command.payload.title,
+          task_date: command.payload.date,
+          parent_path: [],
+          line_number: `pending-${command.created_at}`,
+          completed: false,
+          pending: true,
+        });
+      }
+    }
+    return result;
+  };
   const personalTasks = updatedTasks(
-    snapshotPayload.personal_tasks ?? [],
+    withPendingAdds(
+      snapshotPayload.personal_tasks ?? [],
+      "add-personal-task",
+    ),
     "update-personal-task",
   ).map((item) => ({
     ...item,
@@ -807,7 +839,7 @@ function renderSnapshot(snapshot) {
         ),
   }));
   const workTasks = updatedTasks(
-    snapshotPayload.work_tasks ?? [],
+    withPendingAdds(snapshotPayload.work_tasks ?? [], "add-work-task"),
     "update-work-task",
   ).map((item) => ({
     ...item,
@@ -824,7 +856,27 @@ function renderSnapshot(snapshot) {
             payload.title === item.title && payload.date === item.task_date,
         ),
   }));
-  const reminders = (snapshotPayload.reminders ?? []).map((item) => {
+  const remindersWithPending = [...(snapshotPayload.reminders ?? [])];
+  for (const command of pendingCommands.filter(
+    (entry) => entry.action === "add-reminder",
+  )) {
+    if (
+      !remindersWithPending.some(
+        (item) =>
+          item.title === command.payload.title &&
+          item.due?.slice(0, 10) === command.payload.date,
+      )
+    ) {
+      remindersWithPending.push({
+        id: `pending-${command.created_at}`,
+        title: command.payload.title,
+        due: command.payload.date,
+        completed: false,
+        pending: true,
+      });
+    }
+  }
+  const reminders = remindersWithPending.map((item) => {
     const update = pendingCommands.find(
       (command) =>
         command.action === "update-reminder" &&
@@ -842,7 +894,27 @@ function renderSnapshot(snapshot) {
         ),
     };
   });
-  const learning = (snapshotPayload.learning ?? []).filter(
+  const learningWithPending = [...(snapshotPayload.learning ?? [])];
+  for (const command of pendingCommands.filter(
+    (entry) => entry.action === "add-learning",
+  )) {
+    if (
+      !learningWithPending.some(
+        (item) =>
+          item.title === command.payload.title &&
+          item.kind === command.payload.kind,
+      )
+    ) {
+      learningWithPending.push({
+        id: `pending-${command.created_at}`,
+        title: command.payload.title,
+        kind: command.payload.kind,
+        url: command.payload.url ?? null,
+        pending: true,
+      });
+    }
+  }
+  const learning = learningWithPending.filter(
     (item) =>
       !pending(
         "complete-learning",
@@ -1196,6 +1268,7 @@ async function capture(event) {
     $("#capture-title").value = "";
     $("#capture-url").value = "";
     setStatus("Η καταγραφή περιμένει συγχρονισμό με το Mac.");
+    await refresh();
   } catch (error) {
     setStatus(`Αποτυχία: ${error.message}`);
   } finally {

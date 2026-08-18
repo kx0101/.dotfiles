@@ -66,6 +66,8 @@ read-only.
 Todo deletion removes its provider item and marks Markdown `→ διαγράφηκε`.
 Deleting a parent cascades through every child. Keep rows locked while an entity
 has a pending/processing cloud command.
+Keep offline Vercel additions visible from the command queue until the Mac sync
+agent writes them. Cloud sync runs are serialized by the agent lock.
 
 The Learning panel has separate Books, Articles, and Videos views. Additions must
 use `learning-add`; removal from the pending view must use `learning-complete`,

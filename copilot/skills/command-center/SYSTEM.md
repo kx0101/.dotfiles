@@ -132,6 +132,11 @@ Every mutable row sends an `entity_key`. Supabase enforces one pending/processin
 command per entity, and the UI disables that row until the command settles. This
 prevents rapid checkbox clicks from queuing contradictory complete/reopen actions.
 
+Cloud captures remain durable while the Mac is offline. Vercel overlays pending
+task, reminder, and Learning additions immediately so they remain visible until
+the Mac executes them. `cloud_sync.py` uses a process lock; overlapping wake or
+interval runs skip rather than publishing stale snapshots out of order.
+
 Todo deletion is a soft delete: the provider item is removed, Markdown is marked
 `→ διαγράφηκε`, the active dashboard hides it, and audit/history retain it.
 Deleting a parent recursively soft-deletes all descendants before the parent.
