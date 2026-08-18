@@ -49,5 +49,8 @@ link_skills() {
 
 link_skills "$dotfiles_dir/claude/skills" "$HOME/.claude/skills"
 link_skills "$dotfiles_dir/copilot/skills" "$HOME/.copilot/skills"
+ln -sfn \
+    "$dotfiles_dir/copilot/copilot-instructions.md" \
+    "$HOME/.copilot/copilot-instructions.md"
 
 echo "Done. Authenticate with: copilot   and   claude"

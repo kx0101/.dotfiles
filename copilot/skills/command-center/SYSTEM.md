@@ -68,6 +68,16 @@ shared; do not create a second Vercel theme.
 The Scratchpad autosaves after 800 ms, is owner-only, and persists until Clear.
 It is not Inbox, project memory, or a Markdown note.
 
+The Vercel chat posts to the owner-only `/api/chat` function. The function
+validates the Supabase bearer token, owner UUID, request origin, message limits,
+and action-specific payload before returning a typed proposal. A pure
+deterministic parser in `cloud/lib/chat-parser.js` handles Greek, Greeklish,
+dates, times, capture types, and multi-turn clarification state without an
+external AI provider. Only the explicit Execute button submits the proposal to
+the existing command queue, and destructive actions are outside the chat
+interface. Chat history and pending clarification state remain in browser local
+storage.
+
 The first dashboard open per browser/day shows a dismissible briefing modal.
 Closing it stores the date in browser local storage. The date navigator switches
 to owner-only historical snapshots; past dates are read-only. Future dates use
@@ -115,6 +125,10 @@ The snapshot currently contains:
 
 It excludes Mail bodies, complete Work notes, local/source paths, raw provider
 logs, and credentials.
+
+Chat resolution stays inside the owner-only Vercel function. The approved
+calendar, project, and todo-parent labels are used only for exact deterministic
+matching and are not sent to another provider.
 
 Allowlisted cloud writes:
 

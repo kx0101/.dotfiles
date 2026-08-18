@@ -15,6 +15,7 @@ let pendingCommands = [];
 let scratchpadTimer = null;
 let selectedDate = localDate();
 let availableSnapshots = [];
+let chatMessages = [];
 
 function localDate(value = new Date()) {
   return new Date(value.getTime() - value.getTimezoneOffset() * 60_000)
@@ -57,6 +58,196 @@ function empty(container, message = "Κανένα.") {
 
 function setStatus(message) {
   $("#status").replaceChildren(element("span", "", message));
+}
+
+function loadChatHistory() {
+  try {
+    const value = JSON.parse(
+      localStorage.getItem("command-center-chat") ?? "[]",
+    );
+    chatMessages = Array.isArray(value) ? value.slice(-40) : [];
+  } catch {
+    chatMessages = [];
+    localStorage.removeItem("command-center-chat");
+  }
+}
+
+function saveChatHistory() {
+  localStorage.setItem(
+    "command-center-chat",
+    JSON.stringify(chatMessages.slice(-40)),
+  );
+}
+
+function proposalLabel(action) {
+  return {
+    "add-personal-task": "Νέο Personal task",
+    "add-work-task": "Νέο Work task",
+    "add-reminder": "Νέα υπενθύμιση",
+    "add-learning": "Νέο Learning item",
+    "add-project-note": "Νέα σημείωση έργου",
+    "add-calendar-event": "Νέο συμβάν",
+  }[action] ?? action;
+}
+
+function renderChat() {
+  const container = $("#chat-messages");
+  container.replaceChildren();
+  if (!chatMessages.length) {
+    container.append(
+      element(
+        "div",
+        "chat-message assistant",
+        "Γράψε τι θέλεις να καταγράψεις. Θα ζητήσω διευκρίνιση όπου χρειάζεται.",
+      ),
+    );
+  }
+  for (const message of chatMessages) {
+    container.append(
+      element("div", `chat-message ${message.role}`, message.content),
+    );
+    if (message.role === "assistant" && message.proposal) {
+      const proposal = element("section", "chat-proposal");
+      proposal.append(
+        element("strong", "", proposalLabel(message.proposal.action)),
+      );
+      const details = element("dl");
+      for (const [key, value] of Object.entries(message.proposal.payload)) {
+        if (value === null || value === "") continue;
+        details.append(
+          element("dt", "", key),
+          element("dd", "", String(value)),
+        );
+      }
+      proposal.append(details);
+      const execute = element(
+        "button",
+        "",
+        message.executed ? "Καταγράφηκε" : "Εκτέλεση",
+      );
+      execute.type = "button";
+      execute.disabled = Boolean(message.executed);
+      execute.addEventListener("click", () => executeProposal(message, execute));
+      proposal.append(execute);
+      container.append(proposal);
+    }
+  }
+  container.scrollTop = container.scrollHeight;
+}
+
+function chatContext() {
+  const parents = [
+    ...(snapshotPayload.personal_tasks ?? []).map((item) => ({
+      area: "personal",
+      title: item.title,
+      parent_line: item.line_number,
+      date: item.task_date,
+    })),
+    ...(snapshotPayload.work_tasks ?? []).map((item) => ({
+      area: "work",
+      title: item.title,
+      parent_line: item.line_number,
+      date: item.task_date,
+    })),
+  ].filter((item) => !String(item.parent_line).startsWith("pending-"));
+  return {
+    calendars: snapshotPayload.calendars ?? [],
+    projects: (snapshotPayload.projects ?? []).map((project) => project.name),
+    parents,
+    selected_date: selectedDate,
+  };
+}
+
+async function sendChatMessage(event) {
+  event.preventDefault();
+  const input = $("#chat-input");
+  const content = input.value.trim();
+  if (!content) return;
+  const draft =
+    [...chatMessages]
+      .reverse()
+      .find((message) => message.role === "assistant")?.draft ?? null;
+  const button = event.submitter ?? $("#chat-form button[type='submit']");
+  button.disabled = true;
+  input.value = "";
+  chatMessages.push({
+    id: crypto.randomUUID(),
+    role: "user",
+    content,
+  });
+  renderChat();
+  try {
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        messages: chatMessages.map(({ role, content: text }) => ({
+          role,
+          content: text,
+        })),
+        context: chatContext(),
+        draft,
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error ?? `HTTP ${response.status}`);
+    }
+    chatMessages.push({
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content: payload.reply,
+      proposal: payload.proposal,
+      draft: payload.draft,
+      executed: false,
+    });
+    saveChatHistory();
+    renderChat();
+  } catch (error) {
+    chatMessages.push({
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content: `Αποτυχία: ${error.message}`,
+    });
+    saveChatHistory();
+    renderChat();
+  } finally {
+    button.disabled = false;
+    input.focus();
+  }
+}
+
+async function executeProposal(message, button) {
+  const allowed = new Set([
+    "add-personal-task",
+    "add-work-task",
+    "add-reminder",
+    "add-learning",
+    "add-project-note",
+    "add-calendar-event",
+  ]);
+  if (!allowed.has(message.proposal.action)) {
+    throw new Error("Μη επιτρεπτή ενέργεια.");
+  }
+  button.disabled = true;
+  try {
+    await enqueue(
+      message.proposal.action,
+      message.proposal.payload,
+      `chat:${message.id}`,
+    );
+    message.executed = true;
+    saveChatHistory();
+    renderChat();
+    setStatus("Η ενέργεια περιμένει συγχρονισμό με το Mac.");
+    await refresh();
+  } catch (error) {
+    button.disabled = false;
+    setStatus(`Αποτυχία εκτέλεσης: ${error.message}`);
+  }
 }
 
 function showLogin() {
@@ -1515,6 +1706,7 @@ async function updateAuth(nextSession) {
   $("#access-denied").classList.add("hidden");
   $("#app").classList.toggle("hidden", !session);
   $("#capture-form").classList.toggle("hidden", !session);
+  $("#open-chat").classList.toggle("hidden", !session);
   if (session) {
     await loadAvailableSnapshots();
     $("#history-date").value = selectedDate;
@@ -1572,6 +1764,8 @@ function initializeDate() {
 
 async function initialize() {
   initializeDate();
+  loadChatHistory();
+  renderChat();
   applyVisibility();
   if (!configured) {
     setStatus("Λείπουν τα Supabase environment variables.");
@@ -1621,6 +1815,28 @@ async function initialize() {
       localDate(),
     );
     $("#briefing-dialog").close();
+  });
+  $("#open-chat").addEventListener("click", () => {
+    const dialog = $("#chat-dialog");
+    if (!dialog.open) dialog.showModal();
+    renderChat();
+    $("#chat-input").focus();
+  });
+  $("#close-chat").addEventListener("click", () => {
+    $("#chat-dialog").close();
+  });
+  $("#clear-chat").addEventListener("click", () => {
+    if (!window.confirm("Να καθαριστεί το ιστορικό συνομιλίας;")) return;
+    chatMessages = [];
+    saveChatHistory();
+    renderChat();
+  });
+  $("#chat-form").addEventListener("submit", sendChatMessage);
+  $("#chat-input").addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      $("#chat-form").requestSubmit();
+    }
   });
   $("#history-date").addEventListener("change", (event) => {
     selectHistoryDate(event.target.value);

@@ -94,6 +94,9 @@ email activity, BookIt billing, calendar names, and project operational metadata
 It never includes Mail bodies, complete Work notes, local paths, or credentials.
 Allowlisted mutations are executed locally through the CLI. Apple Health uses a
 separate owner-only table and restricted ingest token.
+The owner-only chat returns a typed proposal and never mutates data directly.
+Queue the proposal only after the user presses Execute. Chat excludes destructive
+actions and keeps its conversation history in browser local storage.
 Vercel project-note capture must use `project-record`; project history remains
 append-only. Project modals show project notes only.
 UI deletion archives a project note through `project-record-archive`; it does

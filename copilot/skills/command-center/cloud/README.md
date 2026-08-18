@@ -42,6 +42,19 @@ Deploy the `cloud/` directory to Vercel with:
 The anon key is intentionally browser-visible. Never place the service role key
 in Vercel or this directory.
 
+## Chat
+
+The owner-only `/api/chat` function uses a deterministic parser with no external
+AI provider, model key, or usage cost. It supports Greek/Greeklish capture,
+natural dates and times, and multi-turn clarification for tasks, Reminders,
+Calendar events, Learning, and project notes. It returns an action-specific
+typed proposal; the browser sends that proposal to the existing Mac command
+queue only after the owner presses Execute.
+
+Chat history and pending clarification state stay in browser local storage.
+Calendar, project, and todo-parent labels are used only for exact matching
+inside the owner-only Vercel function.
+
 ## Mac sync agent
 
 After the first GitHub login, copy the user's UUID from Supabase Authentication →

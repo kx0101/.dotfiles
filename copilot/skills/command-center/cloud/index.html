@@ -324,6 +324,39 @@
         </div>
         <div id="briefing-content" class="briefing-content"></div>
       </dialog>
+
+      <button
+        id="open-chat"
+        class="chat-launcher hidden"
+        type="button"
+        aria-label="Άνοιγμα συνομιλίας"
+      >
+        Συνομιλία
+      </button>
+
+      <dialog id="chat-dialog" class="chat-dialog">
+        <div class="dialog-header">
+          <div>
+            <p class="eyebrow">COMMAND CENTER</p>
+            <h2>Συνομιλία</h2>
+          </div>
+          <div class="chat-header-actions">
+            <button id="clear-chat" type="button">Καθαρισμός</button>
+            <button id="close-chat" type="button">Κλείσιμο</button>
+          </div>
+        </div>
+        <div id="chat-messages" class="chat-messages"></div>
+        <form id="chat-form" class="chat-form">
+          <textarea
+            id="chat-input"
+            rows="2"
+            maxlength="2000"
+            placeholder="Γράψε τι θέλεις να καταγράψεις…"
+            required
+          ></textarea>
+          <button type="submit">Αποστολή</button>
+        </form>
+      </dialog>
     </main>
     <section id="access-denied" class="access-denied hidden">
       <span class="access-x">×</span>
