@@ -8,6 +8,8 @@ description: Manage the user's Obsidian tasks, projects, work workflows, learnin
 Use the companion CLI as the only interface to command-center data. Read
 [`COMMANDS.md`](COMMANDS.md) when a requested operation needs its exact command.
 Read [`WORKFLOWS.md`](WORKFLOWS.md) before a Work mutation.
+Read [`SYSTEM.md`](SYSTEM.md) before changing dashboards, synchronization,
+scheduling, notifications, cloud scope, data ownership, or infrastructure.
 
 ## Default briefing
 
@@ -34,6 +36,57 @@ Scheduled briefings run locally through macOS LaunchAgents at 08:30 daily and
 calls and meetings, all-day calendar entries such as holidays/birthdays/notes,
 Reminders, and mirrored todos. Briefing archives stay outside the vault under
 `~/Library/Application Support/Command Center/Briefings/`.
+The native Briefing Window opens automatically after generation; the notification
+is a secondary reminder rather than the only way to reach the briefing.
+Timed Calendar events receive one local Command Center notification 15 minutes
+before their start. Show the event in local Greek time and include its Google
+Meet URL when Calendar exposes one. The reminder watcher deduplicates by calendar,
+title, and start time.
+
+## Local web dashboard
+
+The dashboard is available only at `http://127.0.0.1:4317`. It opens
+with Morning, preserves the Work task tree, and shows Agenda, Personal tasks,
+health, pending Learning, recent mail from `liakos.koulaxis@yahoo.com`, and
+lifecycle-sorted projects. Personal and Work sections have local visibility
+preferences. Project cards open operational details for tasks, health, GitHub, and BookIt
+business activity. Its browser interface must use CLI-backed
+endpoints and render local tasks/projects before slower Agenda and health
+integrations complete. It must never access the vault, Keychain, Calendar, Mail,
+or provider integrations directly.
+
+The dashboard may add and complete Personal or Work tasks through same-origin,
+JSON-only POST actions. Route Personal through `task-add`/`task-complete` so
+Tasks, the Personal daily file, and Reminders stay synchronized. Route Work
+through `work-task-add`/`work-task-complete` so its Daily Note and Calendar stay
+synchronized. Completed daily tasks remain visible as checked items.
+
+The Learning panel has separate Books, Articles, and Videos views. Additions must
+use `learning-add`; removal from the pending view must use `learning-complete`,
+never deletion. Existing `resource` and `course` items appear under Articles.
+
+The dashboard Mail panel shows sender/subject metadata for messages received by
+the configured Yahoo account within the last 48 hours, with Read/Unread state.
+
+Dashboard health checks must use registered liveness endpoints that do not query
+the database. Readiness endpoints are reserved for deployment/orchestrator gates.
+
+The Reminders panel manages the fixed macOS `Reminders` list. It may add dated or
+undated reminders and complete them. If a reminder ID belongs to a Personal task,
+route completion through `task-complete` so Tasks, the daily file, and Reminders
+remain synchronized. Standalone reminders are completed directly and never
+deleted.
+
+## Cloud/mobile
+
+The Supabase/Vercel web app uses GitHub OAuth and a Mac command queue. Access is
+gated to the configured owner UUID in both the client and RLS. The explicitly
+approved snapshot contains daily Personal/Work task metadata, reminders, Learning,
+Agenda, recent Mail metadata, system health, GitHub attention, masked provider
+email activity, BookIt billing, calendar names, and project operational metadata.
+It never includes Mail bodies, complete Work notes, local paths, or credentials.
+Allowlisted mutations are executed locally through the CLI. Apple Health uses a
+separate owner-only table and restricted ingest token.
 
 Use `exceptions` for the attention-only view. It aggregates overdue tasks, overdue
 Waiting-on items, failed health checks/CI, Resend bounces, and BookIt trial,
@@ -67,6 +120,16 @@ undated Work inbox tasks. Dated Work tasks live in the matching Work Daily Note.
   lines with ad-hoc text replacement.
 - On an ambiguous completion or reschedule match, show the CLI's candidates and
   ask the user to choose.
+- Preserve the Work checkbox tree in output. Show every open parent and child in
+  source order, with each child indented exactly one level below its parent.
+
+Daily task files are generated per date under
+`Command Center/Daily Tasks/<N. Month YYYY>/` for Personal and
+`Work/Daily Notes/<N. Month YYYY>/` for Work. `daily-rollover` carries only
+incomplete, deduplicated items from the previous date and never overwrites an
+existing file. The morning briefing shows today's daily files, Work leaf tasks,
+and a single Work Next item; historical Work tasks are not dumped into today's
+briefing.
 
 After a mutation, reply with one line stating the normalized title and changed
 date/status.
@@ -105,11 +168,13 @@ MRR, subscriptions, trials, upcoming renewals, cancellations, and attention
 states. If its credential is missing, report that setup gap without hiding the
 rest of the project status.
 
-## Inbox and learning
+## Learning and legacy Inbox
 
-Use `capture` for a thought or reference that is neither a task nor settled
-project knowledge. Use `learning-add` for books, articles, videos, courses, and
-reusable resources. Link a learning item to a project when relevant.
+Use `learning-add` for books, articles, videos, courses, and reusable resources.
+Link a learning item to a project when relevant.
+
+The existing Inbox remains untouched historical data, but it is not shown in the
+dashboard or synchronized to mobile. Do not create new Inbox entries.
 
 - Keep one item per entry with title, optional URL, source, and optional project.
 - Complete items with `learning-complete`; never delete them.
@@ -160,6 +225,8 @@ delivery event. Never expose a full recipient address.
 Calendar reads include every calendar and every event visible to macOS:
 timed events, all-day entries, holidays, birthdays, notes/reminders, and mirrored
 todos. Group them by date and type rather than silently filtering categories.
+Agenda entries expose a direct Join action when their URL or description contains
+a Google Meet, Microsoft Teams, or Zoom link.
 
 For ordinary events, always ask which calendar to use. Also resolve ambiguity in
 title, local start time, or duration before the write. Todo mirroring is the only
@@ -172,7 +239,8 @@ Apple Mail access is read-only. The default view contains flagged messages plus
 unread messages received within 48 hours. Search only sender and subject unless
 the user asks for a narrower metadata search. This version never reads message
 bodies. Never mark read, flag, move, delete, reply, forward, or send from this
-skill.
+skill. Dashboard mail cards may open the exact message in Apple Mail through its
+local message ID; the Command Center itself does not change message state.
 
 ## Privacy
 

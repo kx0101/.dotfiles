@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from datetime import datetime
@@ -11,6 +12,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 COMMAND = ROOT / "command_center.py"
+NOTIFIER = (
+    Path.home()
+    / "Library"
+    / "Application Support"
+    / "Command Center"
+    / "CommandCenterNotifier.app"
+    / "Contents"
+    / "MacOS"
+    / "CommandCenterNotifier"
+)
+NOTIFIER_APP = NOTIFIER.parents[2]
 ARCHIVE = (
     Path.home()
     / "Library"
@@ -45,6 +57,15 @@ def task_title(task: dict) -> str:
 
 def render_items(title: str, items: list[dict], fields: tuple[str, ...] = ()) -> list[str]:
     lines = [f"## {title}"]
+    unique: list[dict] = []
+    seen: set[tuple[str, tuple[str, ...]]] = set()
+    for item in items:
+        item_title = task_title(item)
+        key = (item_title.casefold(), tuple(item.get(field, "") for field in fields))
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
+    items = unique
     if not items:
         return lines + ["- Κανένα."]
     for item in items:
@@ -57,42 +78,87 @@ def render_items(title: str, items: list[dict], fields: tuple[str, ...] = ()) ->
     return lines
 
 
+def render_task_tree(title: str, items: list[dict]) -> list[str]:
+    lines = [f"## {title}"]
+    seen: set[tuple[str, ...]] = set()
+    for item in items:
+        path = tuple([*(item.get("parent_path") or []), item.get("title", "")])
+        normalized = tuple(part.casefold() for part in path)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        depth = len(item.get("parent_path") or [])
+        lines.append(f"{'  ' * depth}- {item.get('title', '')}")
+    return lines if len(lines) > 1 else lines + ["- Κανένα."]
+
+
+def event_line(event: dict) -> str:
+    if event.get("all_day") == "true":
+        time_label = "Ολοήμερο"
+    else:
+        try:
+            time_label = datetime.fromisoformat(event["start"]).astimezone().strftime("%H:%M")
+        except (KeyError, ValueError):
+            time_label = event.get("start", "")
+    title = event.get("title", "")
+    calendar = event.get("calendar", "")
+    source = " ".join(
+        value for value in (event.get("url", ""), event.get("description", ""))
+        if value
+    )
+    join = re.search(
+        r"https://(?:meet\.google\.com|[^/\s]+\.zoom\.us|"
+        r"teams\.microsoft\.com|teams\.live\.com)/[^\s<>\"]+",
+        source,
+        re.IGNORECASE,
+    )
+    link = f" · Join: {join.group(0)}" if join else ""
+    return f"- {time_label} · {title} [{calendar}]{link}"
+
+
+def render_agenda(events: list[dict]) -> list[str]:
+    lines = ["## Agenda σήμερα (ώρα Ελλάδας)"]
+    if not events:
+        return lines + ["- Κανένα."]
+    lines.extend(event_line(event) for event in events)
+    return lines
+
+
 def render_morning() -> str:
+    run_command("daily-rollover", "--date", datetime.now().astimezone().date().isoformat())
     home = run_command("home", "--include-personal", "--include-work")
-    exceptions = run_command("exceptions")
     morning = home["morning"]
     lines = [
         f"# Morning briefing — {datetime.now().astimezone():%Y-%m-%d}",
         "",
-        f"Exceptions: {exceptions['summary']['total']} "
-        f"(critical {exceptions['summary']['critical']}, "
-        f"warning {exceptions['summary']['warning']})",
-        "",
     ]
+    personal_today = home["daily_tasks"].get("personal", [])
+    work = morning.get("work") or {}
+    lines += render_items("Σήμερα — Personal", personal_today)
     lines += render_items(
-        "Επείγοντα σήμερα",
-        exceptions["exceptions"],
+        "Σήμερα — Work Next",
+        [work["next"]] if work.get("next") else [],
     )
-    lines += render_items("Εκπρόθεσμα tasks", morning["tasks"])
-    lines += render_items(
-        "Personal σήμερα",
-        home["daily_tasks"].get("personal", []),
+    overdue_personal = sum(
+        task.get("relation") == "overdue" for task in morning["tasks"]
     )
-    lines += render_items(
+    overdue_work = 0
+    lines += ["## Εκπρόθεσμα"]
+    if overdue_personal or overdue_work:
+        lines.append(
+            f"- {overdue_personal} Personal · {overdue_work} Work "
+            "(χωρίς επανάληψη παλιών tasks)"
+        )
+    else:
+        lines.append("- Κανένα.")
+    calendar = morning.get("calendar") or []
+    reminders = [event for event in calendar if event.get("kind") == "reminder"]
+    lines += render_task_tree(
         "Work σήμερα",
         home["daily_tasks"].get("work", []),
     )
-    calendar = morning.get("calendar") or []
-    timed = [event for event in calendar if event.get("all_day") == "false"]
-    reminders = [event for event in calendar if event.get("kind") == "reminder"]
-    all_day = [
-        event
-        for event in calendar
-        if event.get("all_day") == "true" and event not in reminders
-    ]
-    lines += render_items("Calls και meetings", timed, ("start", "calendar"))
-    lines += render_items("Reminders και todos", reminders, ("start", "calendar"))
-    lines += render_items("Holidays, birthdays και notes", all_day, ("calendar",))
+    lines += render_agenda(calendar)
+    lines += render_items("Reminders και todos", reminders)
     if morning.get("errors"):
         lines += ["", "## Integrations με σφάλμα"]
         lines.extend(f"- {name}: {message}" for name, message in morning["errors"].items())
@@ -100,6 +166,7 @@ def render_morning() -> str:
 
 
 def render_weekly() -> str:
+    run_command("daily-rollover", "--date", datetime.now().astimezone().date().isoformat())
     review = run_command("weekly-review")
     exceptions = run_command("exceptions")
     calendar = run_command("calendar-today")
@@ -127,25 +194,11 @@ def render_weekly() -> str:
     ]
     lines += render_items("Health failures", health_failures, ("project", "error"))
     lines += ["", "## Σήμερα"]
-    lines += render_items(
-        "Calls και meetings",
-        [event for event in calendar["events"] if event.get("all_day") == "false"],
-        ("start", "calendar"),
-    )
-    lines += render_items(
-        "Reminders και todos",
-        [event for event in calendar["events"] if event.get("kind") == "reminder"],
-        ("start", "calendar"),
-    )
+    lines += render_agenda(calendar["events"])
     return "\n".join(lines) + "\n"
 
 
-def apple_script_string(value: str) -> str:
-    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
-
-
 def notify(kind: str, path: Path, content: str) -> None:
-    title = "Command Center"
     preview = [
         line.removeprefix("- ").strip()
         for line in content.splitlines()
@@ -154,12 +207,20 @@ def notify(kind: str, path: Path, content: str) -> None:
     message = f"{kind} briefing έτοιμο"
     if preview:
         message += " · " + " · ".join(preview)
-    script = (
-        f"display notification {apple_script_string(message)} "
-        f"with title {apple_script_string(title)} "
-        f"subtitle {apple_script_string(str(path))} sound name \"Glass\""
+    subprocess.run([str(NOTIFIER), kind, str(path), message], check=True)
+    subprocess.Popen(
+        [
+            "open",
+            "-n",
+            str(NOTIFIER_APP),
+            "--args",
+            "--show",
+            str(path),
+        ],
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
-    subprocess.run(["osascript", "-e", script], check=True)
 
 
 def main() -> None:

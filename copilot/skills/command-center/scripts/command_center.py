@@ -27,6 +27,7 @@ from typing import Any
 
 
 TASKS_RELATIVE_PATH = Path("Command Center/Tasks.md")
+PERSONAL_DAILY_RELATIVE_PATH = Path("Command Center/Daily Tasks")
 PROJECTS_RELATIVE_PATH = Path("Command Center/Projects")
 INBOX_RELATIVE_PATH = Path("Command Center/Inbox.md")
 WAITING_ON_RELATIVE_PATH = Path("Command Center/Waiting-on.md")
@@ -92,6 +93,9 @@ WAITING_ITEM_PATTERN = re.compile(
     r"<!-- cc: (?P<metadata>\{.*\}) -->$"
 )
 WORK_TASK_PATTERN = re.compile(
+    r"^(?P<prefix>\s*(?:\d+\.|-)\s+)\[(?P<state>[ xX])\]\s+(?P<title>.+)$"
+)
+DAILY_TASK_PATTERN = re.compile(
     r"^(?P<prefix>\s*(?:\d+\.|-)\s+)\[(?P<state>[ xX])\]\s+(?P<title>.+)$"
 )
 MONTH_NAMES = (
@@ -194,6 +198,7 @@ class WaitingOnItem:
 @dataclass
 class WorkTask:
     title: str
+    parent_path: list[str]
     task_date: str
     path: str
     line_number: int
@@ -650,6 +655,13 @@ def add_task(
             sync_provider=sync_provider,
         )
         append_task(tasks_path, section, line)
+    daily_path = None
+    if action_date and section_uses_personal_daily(vault, section):
+        daily_path = append_personal_daily_task(
+            vault,
+            title,
+            action_date,
+        )
     return {
         "title": title,
         "section": section,
@@ -658,6 +670,7 @@ def add_task(
         "calendar": calendar_name,
         "calendar_uid": calendar_uid,
         "sync_provider": sync_provider,
+        "daily_path": daily_path,
     }
 
 
@@ -670,8 +683,14 @@ def task_matches(tasks: list[Task], query: str) -> list[Task]:
     return [task for task in open_tasks if normalized in task.title.casefold()]
 
 
-def select_task(tasks_path: Path, query: str) -> Task:
+def select_task(
+    tasks_path: Path,
+    query: str,
+    action_date: str | None = None,
+) -> Task:
     matches = task_matches(parse_tasks(tasks_path), query)
+    if action_date:
+        matches = [task for task in matches if task.action_date == action_date]
     if not matches:
         raise CommandCenterError(f"No open task matches: {query}")
     if len(matches) > 1:
@@ -691,10 +710,14 @@ def replace_task_line(tasks_path: Path, task: Task, new_line: str) -> None:
     atomic_write(tasks_path, "\n".join(lines).rstrip() + "\n")
 
 
-def complete_task(vault: Path, query: str) -> dict[str, Any]:
+def complete_task(
+    vault: Path,
+    query: str,
+    action_date: str | None = None,
+) -> dict[str, Any]:
     tasks_path = vault / TASKS_RELATIVE_PATH
     with path_lock(tasks_path):
-        task = select_task(tasks_path, query)
+        task = select_task(tasks_path, query, action_date)
         completed_date = date.today().isoformat()
         if task.calendar_name and task.calendar_uid:
             update_synced_todo(
@@ -714,11 +737,19 @@ def complete_task(vault: Path, query: str) -> dict[str, Any]:
             sync_provider=task.sync_provider,
         )
         replace_task_line(tasks_path, task, line)
+    daily_synced = False
+    if task.action_date and section_uses_personal_daily(vault, task.section):
+        daily_synced = complete_personal_daily_task(
+            vault,
+            task.title,
+            task.action_date,
+        )
     return {
         "title": task.title,
         "section": task.section,
         "status": "completed",
         "completed_date": completed_date,
+        "daily_synced": daily_synced,
     }
 
 
@@ -755,6 +786,21 @@ def reschedule_task(vault: Path, query: str, action_date: str) -> dict[str, Any]
             sync_provider=sync_provider,
         )
         replace_task_line(tasks_path, task, line)
+    daily_path = None
+    if section_uses_personal_daily(vault, task.section):
+        if task.action_date and task.action_date != action_date:
+            daily_path = move_personal_daily_task(
+                vault,
+                task.title,
+                task.action_date,
+                action_date,
+            )
+        else:
+            daily_path = append_personal_daily_task(
+                vault,
+                task.title,
+                action_date,
+            )
     return {
         "title": task.title,
         "section": task.section,
@@ -763,6 +809,7 @@ def reschedule_task(vault: Path, query: str, action_date: str) -> dict[str, Any]
         "calendar": calendar_name,
         "calendar_uid": calendar_uid,
         "sync_provider": sync_provider,
+        "daily_path": daily_path,
     }
 
 
@@ -1277,6 +1324,61 @@ def set_project_summary(
     return {"summary": record.text, "record": asdict(record)}
 
 
+def replace_frontmatter_list(
+    content: str,
+    key: str,
+    values: list[str],
+) -> str:
+    lines = content.splitlines()
+    start = next(
+        (index for index, line in enumerate(lines) if line == f"{key}:"),
+        None,
+    )
+    if start is None:
+        raise CommandCenterError(f"Project frontmatter has no '{key}' field.")
+    end = start + 1
+    while end < len(lines) and lines[end].startswith("  - "):
+        end += 1
+    replacement = [f"{key}:"]
+    replacement.extend(
+        f"  - {json.dumps(value, ensure_ascii=False)}"
+        for value in values
+    )
+    lines[start:end] = replacement
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def set_project_health_checks(
+    vault: Path,
+    name: str,
+    health_checks: list[str],
+    source: str,
+) -> dict[str, Any]:
+    project = project_by_name(vault, name)
+    validate_project_metadata([], [], [], health_checks)
+    note = vault / project.note_path
+    with path_lock(note):
+        block, record = project_record_block(
+            "decision",
+            "Τα automated health checks χρησιμοποιούν liveness endpoints "
+            "που δεν κάνουν database ping.",
+            source,
+            None,
+        )
+        content = replace_frontmatter_list(
+            note.read_text(encoding="utf-8"),
+            "health_checks",
+            health_checks,
+        )
+        content = append_record_to_content(content, block)
+        atomic_write(note, content)
+    return {
+        "project": project.name,
+        "health_checks": health_checks,
+        "record": asdict(record),
+    }
+
+
 def add_project(
     vault: Path,
     name: str | None,
@@ -1398,11 +1500,15 @@ end cleanText
 
 
 def parse_tabular_output(output: str, fields: list[str]) -> list[dict[str, str]]:
+    if not output.strip() or output.strip() == "missing value":
+        return []
     items: list[dict[str, str]] = []
     for line in output.splitlines():
         if not line.strip():
             continue
-        values = line.split("\t")
+        values = line.split("\t", len(fields) - 1)
+        if len(values) < len(fields):
+            values.extend([""] * (len(fields) - len(values)))
         if len(values) != len(fields):
             raise IntegrationError("macOS integration returned malformed output.")
         items.append(dict(zip(fields, values, strict=True)))
@@ -1432,7 +1538,27 @@ tell application "Calendar"
         set calName to name of cal
         set matchingEvents to every event of cal whose start date < endDate and end date > startDate
         repeat with evt in matchingEvents
-            set eventLine to my cleanText(calName) & tab & my cleanText(summary of evt) & tab & my isoDate(start date of evt) & tab & my isoDate(end date of evt) & tab & (allday event of evt as text)
+            try
+                set rawURL to url of evt
+                if rawURL is missing value then
+                    set eventURL to ""
+                else
+                    set eventURL to my cleanText(rawURL as text)
+                end if
+            on error
+                set eventURL to ""
+            end try
+            try
+                set rawDescription to description of evt
+                if rawDescription is missing value then
+                    set eventDescription to ""
+                else
+                    set eventDescription to my cleanText(rawDescription as text)
+                end if
+            on error
+                set eventDescription to ""
+            end try
+            set eventLine to my cleanText(calName) & tab & my cleanText(summary of evt) & tab & my isoDate(start date of evt) & tab & my isoDate(end date of evt) & tab & (allday event of evt as text) & tab & eventURL & tab & eventDescription
             set end of output to eventLine
         end repeat
     end repeat
@@ -1442,7 +1568,7 @@ return output as text
 '''
     events = parse_tabular_output(
         run_osascript(script),
-        ["calendar", "title", "start", "end", "all_day"],
+        ["calendar", "title", "start", "end", "all_day", "url", "description"],
     )
     events.sort(key=lambda event: (event["start"], event["calendar"], event["title"]))
     return events
@@ -1485,6 +1611,8 @@ return output as text
             "end": reminder["due"],
             "all_day": "true",
             "kind": "reminder",
+            "url": "",
+            "description": "",
         }
         for reminder in reminders
     ]
@@ -1504,6 +1632,61 @@ def calendar_today() -> list[dict[str, str]]:
             else "event"
         )
     events.extend(reminders_today())
+    events.sort(key=lambda event: (event["start"], event["calendar"], event["title"]))
+    return events
+
+
+def calendar_upcoming(minutes: int) -> list[dict[str, str]]:
+    if minutes < 1 or minutes > 1440:
+        raise CommandCenterError(
+            "Upcoming calendar range must be between 1 and 1440 minutes."
+        )
+    script = APPLE_SCRIPT_HELPERS + r'''
+on run argv
+    set rangeMinutes to item 1 of argv as integer
+    set startDate to current date
+    set endDate to startDate + (rangeMinutes * minutes)
+    set output to {}
+    tell application "Calendar"
+        repeat with cal in calendars
+            set calName to name of cal
+            set matchingEvents to every event of cal whose start date > startDate and start date <= endDate and allday event is false
+            repeat with evt in matchingEvents
+                try
+                    set rawURL to url of evt
+                    if rawURL is missing value then
+                        set eventURL to ""
+                    else
+                        set eventURL to my cleanText(rawURL as text)
+                    end if
+                on error
+                    set eventURL to ""
+                end try
+                try
+                    set rawDescription to description of evt
+                    if rawDescription is missing value then
+                        set eventDescription to ""
+                    else
+                        set eventDescription to my cleanText(rawDescription as text)
+                    end if
+                on error
+                    set eventDescription to ""
+                end try
+                set eventLine to my cleanText(calName) & tab & my cleanText(summary of evt) & tab & my isoDate(start date of evt) & tab & my isoDate(end date of evt) & tab & "false" & tab & eventURL & tab & eventDescription
+                set end of output to eventLine
+            end repeat
+        end repeat
+    end tell
+    set AppleScript's text item delimiters to linefeed
+    return output as text
+end run
+'''
+    events = parse_tabular_output(
+        run_osascript(script, [str(minutes)]),
+        ["calendar", "title", "start", "end", "all_day", "url", "description"],
+    )
+    for event in events:
+        event["kind"] = "event"
     events.sort(key=lambda event: (event["start"], event["calendar"], event["title"]))
     return events
 
@@ -1589,28 +1772,39 @@ def reminder_list_names() -> list[str]:
     return [name.strip() for name in output.split(",") if name.strip()]
 
 
-def add_reminder_todo(list_name: str, title: str, action_date: str) -> str:
-    validate_iso_date(action_date)
+def add_reminder_item(
+    list_name: str,
+    title: str,
+    action_date: str | None,
+) -> str:
+    title = " ".join(title.split())
+    if not title or "\n" in title or "\r" in title:
+        raise CommandCenterError("Reminder title must fit on one non-empty line.")
+    if action_date:
+        validate_iso_date(action_date)
+    parsed_date = date.fromisoformat(action_date) if action_date else None
     if list_name not in reminder_list_names():
         raise CommandCenterError(f"Unknown macOS Reminders list: {list_name}")
-    parsed_date = date.fromisoformat(action_date)
     script = r'''
 on run argv
     set listName to item 1 of argv
     set todoTitle to item 2 of argv
-    set eventYear to item 3 of argv as integer
-    set eventMonth to item 4 of argv as integer
-    set eventDay to item 5 of argv as integer
-
-    set dueDate to current date
-    set year of dueDate to eventYear
-    set month of dueDate to eventMonth
-    set day of dueDate to eventDay
-    set time of dueDate to 0
-
+    set dateValue to item 3 of argv
     tell application "Reminders"
         set targetList to list listName
-        set createdReminder to make new reminder at end of reminders of targetList with properties {name:todoTitle, due date:dueDate}
+        if dateValue is "" then
+            set createdReminder to make new reminder at end of reminders of targetList with properties {name:todoTitle}
+        else
+            set eventYear to item 4 of argv as integer
+            set eventMonth to item 5 of argv as integer
+            set eventDay to item 6 of argv as integer
+            set dueDate to current date
+            set year of dueDate to eventYear
+            set month of dueDate to eventMonth
+            set day of dueDate to eventDay
+            set time of dueDate to 0
+            set createdReminder to make new reminder at end of reminders of targetList with properties {name:todoTitle, due date:dueDate}
+        end if
         return id of createdReminder
     end tell
 end run
@@ -1620,11 +1814,111 @@ end run
         [
             list_name,
             title,
-            str(parsed_date.year),
-            str(parsed_date.month),
-            str(parsed_date.day),
+            action_date or "",
+            str(parsed_date.year) if parsed_date else "0",
+            str(parsed_date.month) if parsed_date else "0",
+            str(parsed_date.day) if parsed_date else "0",
         ],
     )
+
+
+def add_reminder_todo(list_name: str, title: str, action_date: str) -> str:
+    validate_iso_date(action_date)
+    return add_reminder_item(list_name, title, action_date)
+
+
+def list_reminders(vault: Path, list_name: str) -> list[dict[str, Any]]:
+    if list_name not in reminder_list_names():
+        raise CommandCenterError(f"Unknown macOS Reminders list: {list_name}")
+    script = APPLE_SCRIPT_HELPERS + r'''
+on run argv
+    set listName to item 1 of argv
+    set output to {}
+    tell application "Reminders"
+        set targetList to list listName
+        set openReminders to every reminder of targetList whose completed is false
+        repeat with reminderItem in openReminders
+            try
+                set dueValue to due date of reminderItem
+                if dueValue is missing value then
+                    set dueText to ""
+                else
+                    set dueText to my isoDate(dueValue)
+                end if
+            on error
+                set dueText to ""
+            end try
+            set reminderLine to my cleanText(id of reminderItem) & tab & my cleanText(name of reminderItem) & tab & dueText
+            set end of output to reminderLine
+        end repeat
+    end tell
+    set AppleScript's text item delimiters to linefeed
+    return output as text
+end run
+'''
+    reminders = parse_tabular_output(
+        run_osascript(script, [list_name]),
+        ["id", "title", "due"],
+    )
+    task_by_uid = {
+        task.calendar_uid: task
+        for task in parse_tasks(vault / TASKS_RELATIVE_PATH)
+        if task.calendar_uid
+    }
+    for reminder in reminders:
+        task = task_by_uid.get(reminder["id"])
+        reminder["list"] = list_name
+        reminder["managed_task"] = task is not None
+        reminder["task_date"] = task.action_date if task else None
+    reminders.sort(
+        key=lambda reminder: (
+            reminder["due"] or "9999-12-31",
+            reminder["title"].casefold(),
+        )
+    )
+    return reminders
+
+
+def complete_reminder(
+    vault: Path,
+    list_name: str,
+    reminder_id: str,
+) -> dict[str, Any]:
+    matches = [
+        task
+        for task in parse_tasks(vault / TASKS_RELATIVE_PATH)
+        if task.calendar_uid == reminder_id and not task.completed
+    ]
+    if len(matches) > 1:
+        raise CommandCenterError("Multiple tasks share the same Reminder ID.")
+    if matches:
+        task = matches[0]
+        return {
+            "provider": "task",
+            **complete_task(vault, task.title, task.action_date),
+        }
+    script = r'''
+on run argv
+    set listName to item 1 of argv
+    set reminderId to item 2 of argv
+    tell application "Reminders"
+        set targetList to list listName
+        set matches to every reminder of targetList whose id is reminderId
+        if (count of matches) is 0 then error "Reminder not found"
+        set targetReminder to item 1 of matches
+        set reminderTitle to name of targetReminder
+        set completed of targetReminder to true
+        return reminderTitle
+    end tell
+end run
+'''
+    title = run_osascript(script, [list_name, reminder_id])
+    return {
+        "provider": "reminders",
+        "id": reminder_id,
+        "title": title,
+        "status": "completed",
+    }
 
 
 def update_reminder_todo(
@@ -1843,16 +2137,44 @@ end run
     }
 
 
-def mail_attention(query: str | None) -> list[dict[str, str]]:
+def mail_attention(
+    query: str | None,
+    unread_only: bool = False,
+    account: str | None = None,
+) -> list[dict[str, str]]:
     script = APPLE_SCRIPT_HELPERS + r'''
 on run argv
     set searchQuery to ""
     if (count of argv) > 0 then set searchQuery to item 1 of argv
+    set unreadOnly to false
+    if (count of argv) > 1 then set unreadOnly to (item 2 of argv is "true")
+    set accountAddress to ""
+    if (count of argv) > 2 then set accountAddress to item 3 of argv
     set cutoffDate to (current date) - (48 * hours)
     set output to {}
     tell application "Mail"
-        if searchQuery is "" then
+        if accountAddress is not "" then
+            set matchingMessages to {}
+            set accountFound to false
+            repeat with acct in accounts
+                if (email addresses of acct) contains accountAddress then
+                    set accountFound to true
+                    repeat with box in mailboxes of acct
+                        if (name of box as text) is "Inbox" or (name of box as text) is "INBOX" then
+                            if unreadOnly then
+                                set matchingMessages to matchingMessages & (every message of box whose read status is false)
+                            else
+                                set matchingMessages to matchingMessages & (every message of box whose date received > cutoffDate)
+                            end if
+                        end if
+                    end repeat
+                end if
+            end repeat
+            if accountFound is false then error "Mail account not found"
+        else if searchQuery is "" then
             set matchingMessages to every message of inbox whose ((read status is false and date received > cutoffDate) or flagged status is true)
+        else if unreadOnly then
+            set matchingMessages to every message of inbox whose (read status is false and (subject contains searchQuery or sender contains searchQuery))
         else
             set matchingMessages to every message of inbox whose (subject contains searchQuery or sender contains searchQuery)
         end if
@@ -1860,7 +2182,12 @@ on run argv
         if itemCount > 100 then set itemCount to 100
         repeat with i from 1 to itemCount
             set msg to item i of matchingMessages
-            set messageLine to my cleanText(sender of msg) & tab & my cleanText(subject of msg) & tab & my isoDate(date received of msg) & tab & (read status of msg as text) & tab & (flagged status of msg as text)
+            try
+                set stableId to message id of msg as text
+            on error
+                set stableId to ""
+            end try
+            set messageLine to my cleanText(sender of msg) & tab & my cleanText(subject of msg) & tab & my isoDate(date received of msg) & tab & (read status of msg as text) & tab & (flagged status of msg as text) & tab & my cleanText(stableId)
             set end of output to messageLine
         end repeat
     end tell
@@ -1869,8 +2196,15 @@ on run argv
 end run
 '''
     messages = parse_tabular_output(
-        run_osascript(script, [query] if query else None),
-        ["sender", "subject", "received", "read", "flagged"],
+        run_osascript(
+            script,
+            [
+                query or "",
+                "true" if unread_only else "false",
+                account or "",
+            ],
+        ),
+        ["sender", "subject", "received", "read", "flagged", "message_id"],
     )
     messages.sort(key=lambda message: message["received"], reverse=True)
     return messages[: 30 if query else 10]
@@ -2320,6 +2654,235 @@ def work_daily_path(vault: Path, task_date: date) -> Path:
     return work_daily_root(vault) / month_folder / f"{task_date.isoformat()}.md"
 
 
+def personal_daily_path(vault: Path, task_date: date) -> Path:
+    month_folder = f"{task_date.month}. {MONTH_NAMES[task_date.month - 1]} {task_date.year}"
+    return (
+        vault
+        / PERSONAL_DAILY_RELATIVE_PATH
+        / month_folder
+        / f"{task_date.isoformat()}.md"
+    )
+
+
+def section_uses_personal_daily(vault: Path, section: str) -> bool:
+    if section.casefold() == "personal":
+        return True
+    return any(
+        project.name.casefold() == section.casefold()
+        and project.area == "personal"
+        for project in load_projects(vault)
+    )
+
+
+def open_daily_lines(path: Path) -> list[str]:
+    if not path.is_file():
+        return []
+    lines: list[str] = []
+    seen: set[str] = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        match = DAILY_TASK_PATTERN.match(line)
+        if not match or match.group("state").lower() == "x":
+            continue
+        key = " ".join(line.split()).casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        lines.append(line)
+    return lines
+
+
+def ensure_personal_daily_file(vault: Path, target_date: date) -> tuple[Path, bool]:
+    path = personal_daily_path(vault, target_date)
+    with path_lock(path):
+        if path.exists():
+            return path, False
+        previous = personal_daily_path(vault, target_date - timedelta(days=1))
+        lines = open_daily_lines(previous)
+        content = f"# Personal daily tasks — {target_date.isoformat()}\n\n"
+        content += "\n".join(lines) + ("\n" if lines else "")
+        atomic_write(path, content)
+    return path, True
+
+
+def append_personal_daily_task(
+    vault: Path,
+    title: str,
+    target_date: str,
+) -> str:
+    parsed_date = date.fromisoformat(target_date)
+    path, _ = ensure_personal_daily_file(vault, parsed_date)
+    with path_lock(path):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        exists = any(
+            match.group("state").lower() != "x"
+            and match.group("title").strip().casefold() == title.casefold()
+            for line in lines
+            if (match := DAILY_TASK_PATTERN.match(line))
+        )
+        if not exists:
+            lines.append(f"- [ ] {title}")
+            atomic_write(path, "\n".join(lines).rstrip() + "\n")
+    return str(path.relative_to(vault))
+
+
+def complete_personal_daily_task(
+    vault: Path,
+    title: str,
+    target_date: str,
+    moved_to: str | None = None,
+) -> bool:
+    path = personal_daily_path(vault, date.fromisoformat(target_date))
+    if not path.is_file():
+        return False
+    with path_lock(path):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        matches = [
+            index
+            for index, line in enumerate(lines)
+            if (match := DAILY_TASK_PATTERN.match(line))
+            and match.group("state").lower() != "x"
+            and match.group("title").strip().casefold() == title.casefold()
+        ]
+        if len(matches) > 1:
+            raise CommandCenterError(
+                f"Multiple Personal daily tasks match exactly: {title}"
+            )
+        if not matches:
+            return False
+        index = matches[0]
+        match = DAILY_TASK_PATTERN.match(lines[index])
+        if match is None:
+            raise CommandCenterError("Personal daily task changed while selected.")
+        suffix = f" → μεταφέρθηκε {moved_to}" if moved_to else ""
+        lines[index] = f"{match.group('prefix')}[x] {title}{suffix}"
+        atomic_write(path, "\n".join(lines).rstrip() + "\n")
+    return True
+
+
+def move_personal_daily_task(
+    vault: Path,
+    title: str,
+    previous_date: str,
+    target_date: str,
+) -> str:
+    complete_personal_daily_task(
+        vault,
+        title,
+        previous_date,
+        moved_to=target_date,
+    )
+    return append_personal_daily_task(vault, title, target_date)
+
+
+def daily_rollover(vault: Path, target_date: str) -> dict[str, Any]:
+    validate_iso_date(target_date)
+    current = date.fromisoformat(target_date)
+    previous = current - timedelta(days=1)
+    personal_path = personal_daily_path(vault, current)
+    work_path = work_daily_path(vault, current)
+    created: dict[str, Any] = {"date": target_date, "created": []}
+
+    personal_path, personal_created = ensure_personal_daily_file(vault, current)
+    if personal_created:
+        lines = open_daily_lines(personal_path)
+        if not lines:
+            for task in list_tasks(vault, "today", None):
+                if task["section"].casefold() != "work":
+                    append_personal_daily_task(
+                        vault,
+                        task["title"],
+                        target_date,
+                    )
+            lines = open_daily_lines(personal_path)
+        created["created"].append(
+            {
+                "area": "Personal",
+                "path": str(personal_path.relative_to(vault)),
+                "carried": len(lines),
+            }
+        )
+
+    if not work_path.exists():
+        previous_path = work_daily_path(vault, previous)
+        lines = open_daily_lines(previous_path)
+        work_path.parent.mkdir(parents=True, exist_ok=True)
+        content = f"# Work daily tasks — {target_date}\n\n"
+        content += "\n".join(lines) + ("\n" if lines else "")
+        atomic_write(work_path, content)
+        created["created"].append(
+            {
+                "area": "Work",
+                "path": str(work_path.relative_to(vault)),
+                "carried": len(lines),
+            }
+        )
+    return created
+
+
+def list_daily_tasks(
+    vault: Path,
+    target_date: str,
+    include_completed: bool = False,
+) -> dict[str, list[dict[str, Any]]]:
+    validate_iso_date(target_date)
+    current = date.fromisoformat(target_date)
+    personal_path = personal_daily_path(vault, current)
+    personal: list[dict[str, Any]] = []
+    hierarchy: list[tuple[int, str]] = []
+    if personal_path.is_file():
+        for index, line in enumerate(
+            personal_path.read_text(encoding="utf-8").splitlines()
+        ):
+            match = DAILY_TASK_PATTERN.match(line)
+            if not match:
+                continue
+            indent = len(line) - len(line.lstrip(" \t"))
+            while hierarchy and indent <= hierarchy[-1][0]:
+                hierarchy.pop()
+            title = match.group("title").strip()
+            completed = match.group("state").lower() == "x"
+            if include_completed or not completed:
+                personal.append(
+                    {
+                        "title": title,
+                        "parent_path": [parent for _, parent in hierarchy],
+                        "path": str(personal_path.relative_to(vault)),
+                        "task_date": target_date,
+                        "line_number": index + 1,
+                        "completed": completed,
+                    }
+                )
+            hierarchy.append((indent, title))
+    work = [
+        asdict(task)
+        for task in parse_work_tasks(vault)
+        if task.task_date == target_date
+        and (include_completed or not task.completed)
+    ]
+    return {"personal": personal, "work": work}
+
+
+def next_work_task(vault: Path) -> dict[str, Any] | None:
+    today = date.today().isoformat()
+    tasks = [
+        task
+        for task in parse_work_tasks(vault)
+        if not task.completed and task.task_date >= today
+    ]
+    tasks.sort(key=lambda task: (task.task_date, task.path, task.line_number))
+    for task in tasks:
+        child_path = [*task.parent_path, task.title]
+        has_open_child = any(
+            other.path == task.path
+            and not other.completed
+            and other.parent_path == child_path
+            for other in tasks
+        )
+        if not has_open_child:
+            return asdict(task)
+    return None
+
+
 def parse_work_tasks(vault: Path) -> list[WorkTask]:
     root = work_daily_root(vault)
     if not root.is_dir():
@@ -2332,10 +2895,12 @@ def parse_work_tasks(vault: Path) -> list[WorkTask]:
             continue
         lines = note.read_text(encoding="utf-8").splitlines()
         managed_bounds = markdown_section_bounds(lines, "Command Center")
+        hierarchy: list[tuple[int, str]] = []
         for index, line in enumerate(lines):
             match = WORK_TASK_PATTERN.match(line)
             if not match:
                 continue
+            indent = len(line) - len(line.lstrip(" \t"))
             raw_title = match.group("title").strip()
             calendar_match = CALENDAR_METADATA_PATTERN.search(raw_title)
             calendar_data = (
@@ -2344,6 +2909,8 @@ def parse_work_tasks(vault: Path) -> list[WorkTask]:
                 else {}
             )
             title = CALENDAR_METADATA_PATTERN.sub("", raw_title).strip()
+            while hierarchy and indent <= hierarchy[-1][0]:
+                hierarchy.pop()
             managed = bool(
                 managed_bounds
                 and managed_bounds[0] < index < managed_bounds[1]
@@ -2351,6 +2918,7 @@ def parse_work_tasks(vault: Path) -> list[WorkTask]:
             tasks.append(
                 WorkTask(
                     title=title,
+                    parent_path=[parent for _, parent in hierarchy],
                     task_date=task_date,
                     path=str(note.relative_to(vault)),
                     line_number=index + 1,
@@ -2363,6 +2931,7 @@ def parse_work_tasks(vault: Path) -> list[WorkTask]:
                     calendar_uid=calendar_data.get("uid"),
                 )
             )
+            hierarchy.append((indent, title))
     return tasks
 
 
@@ -2613,6 +3182,86 @@ def search_work(vault: Path, query: str, limit: int) -> list[dict[str, Any]]:
     return results
 
 
+def search_all(vault: Path, query: str, limit: int) -> list[dict[str, Any]]:
+    normalized = " ".join(query.split()).casefold()
+    if len(normalized) < 2:
+        raise CommandCenterError("Search query must contain at least 2 characters.")
+    if limit < 1 or limit > 100:
+        raise CommandCenterError("Search limit must be between 1 and 100.")
+    results: list[dict[str, Any]] = []
+
+    def add(result: dict[str, Any]) -> None:
+        if len(results) < limit:
+            results.append(result)
+
+    for task in parse_tasks(vault / TASKS_RELATIVE_PATH):
+        if normalized in task.title.casefold():
+            add(
+                {
+                    "kind": "task",
+                    "title": task.title,
+                    "context": task.section,
+                    "path": str(TASKS_RELATIVE_PATH),
+                    "completed": task.completed,
+                }
+            )
+    for project in load_projects(vault):
+        summary = project_summary(vault / project.note_path)
+        if normalized in project.name.casefold() or normalized in summary.casefold():
+            add(
+                {
+                    "kind": "project",
+                    "title": project.name,
+                    "context": summary,
+                    "path": project.note_path,
+                }
+            )
+        for record in project_records(vault / project.note_path):
+            if record.active and normalized in record.text.casefold():
+                add(
+                    {
+                        "kind": "project-record",
+                        "title": record.text,
+                        "context": project.name,
+                        "path": project.note_path,
+                    }
+                )
+    for item in parse_learning(vault):
+        if normalized in item.title.casefold():
+            add(
+                {
+                    "kind": "learning",
+                    "title": item.title,
+                    "context": item.kind,
+                    "path": str(LEARNING_RELATIVE_PATH),
+                    "url": item.url,
+                    "completed": item.completed,
+                }
+            )
+    for item in inbox_items(vault):
+        if normalized in item["text"].casefold():
+            add(
+                {
+                    "kind": "inbox",
+                    "title": item["text"],
+                    "context": item.get("project"),
+                    "path": str(INBOX_RELATIVE_PATH),
+                }
+            )
+    if len(results) < limit:
+        for match in search_work(vault, query, limit - len(results)):
+            add(
+                {
+                    "kind": "work",
+                    "title": match["text"],
+                    "context": match["path"],
+                    "path": match["path"],
+                    "line_number": match["line_number"],
+                }
+            )
+    return results
+
+
 def work_target(
     vault: Path,
     kind: str,
@@ -2688,6 +3337,7 @@ def work_briefing(vault: Path) -> dict[str, Any]:
     sources = work_sources(vault)
     return {
         "today": [asdict(task) for task in today_tasks],
+        "next": next_work_task(vault),
         "recent_overdue": [asdict(task) for task in recent_overdue],
         "older_open_count": older_open_count,
         "latest_one_on_one": sources["one_on_one"][-1]
@@ -2714,6 +3364,161 @@ def credential(name: str, keychain_service: str) -> str:
         f"{name} is not configured. Store it in macOS Keychain service "
         f"'{keychain_service}'."
     )
+
+
+def personal_health() -> dict[str, Any]:
+    base_url = credential(
+        "COMMAND_CENTER_SUPABASE_URL",
+        "command-center-supabase-url",
+    ).rstrip("/")
+    service_key = credential(
+        "COMMAND_CENTER_SUPABASE_SERVICE_KEY",
+        "command-center-supabase-service",
+    )
+    user_id = credential(
+        "COMMAND_CENTER_SUPABASE_USER_ID",
+        "command-center-supabase-user",
+    )
+    if not re.fullmatch(
+        r"[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}",
+        user_id,
+    ):
+        raise IntegrationError("Supabase user ID is invalid.")
+    query = urllib.parse.urlencode(
+        {
+            "user_id": f"eq.{user_id}",
+            "select": (
+                "day,steps,sleep_minutes,active_energy_kcal,"
+                "resting_heart_rate,updated_at"
+            ),
+            "order": "day.desc",
+            "limit": "7",
+        }
+    )
+    request = urllib.request.Request(
+        f"{base_url}/rest/v1/command_center_health_daily?{query}",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            rows = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raise IntegrationError(
+            f"Supabase Health returned HTTP {exc.code}."
+        ) from exc
+    except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+        raise IntegrationError(
+            f"Supabase Health request failed: {type(exc).__name__}."
+        ) from exc
+    return {"rows": rows}
+
+
+def scratchpad_get() -> dict[str, Any]:
+    base_url = credential(
+        "COMMAND_CENTER_SUPABASE_URL",
+        "command-center-supabase-url",
+    ).rstrip("/")
+    service_key = credential(
+        "COMMAND_CENTER_SUPABASE_SERVICE_KEY",
+        "command-center-supabase-service",
+    )
+    user_id = credential(
+        "COMMAND_CENTER_SUPABASE_USER_ID",
+        "command-center-supabase-user",
+    )
+    request = urllib.request.Request(
+        f"{base_url}/rest/v1/command_center_scratchpad"
+        f"?user_id=eq.{urllib.parse.quote(user_id)}"
+        "&select=content,updated_at",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            rows = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raise IntegrationError(
+            f"Supabase Scratchpad returned HTTP {exc.code}."
+        ) from exc
+    return rows[0] if rows else {"content": "", "updated_at": None}
+
+
+def scratchpad_set(content: str) -> dict[str, Any]:
+    if len(content) > 20_000:
+        raise CommandCenterError("Scratchpad content exceeds 20,000 characters.")
+    base_url = credential(
+        "COMMAND_CENTER_SUPABASE_URL",
+        "command-center-supabase-url",
+    ).rstrip("/")
+    service_key = credential(
+        "COMMAND_CENTER_SUPABASE_SERVICE_KEY",
+        "command-center-supabase-service",
+    )
+    user_id = credential(
+        "COMMAND_CENTER_SUPABASE_USER_ID",
+        "command-center-supabase-user",
+    )
+    now = datetime.now().astimezone().isoformat(timespec="seconds")
+    request = urllib.request.Request(
+        f"{base_url}/rest/v1/command_center_scratchpad?on_conflict=user_id",
+        data=json.dumps(
+            {"user_id": user_id, "content": content, "updated_at": now}
+        ).encode("utf-8"),
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates,return=minimal",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20):
+            pass
+    except urllib.error.HTTPError as exc:
+        raise IntegrationError(
+            f"Supabase Scratchpad returned HTTP {exc.code}."
+        ) from exc
+    return {"content": content, "updated_at": now}
+
+
+def scratchpad_clear() -> dict[str, Any]:
+    base_url = credential(
+        "COMMAND_CENTER_SUPABASE_URL",
+        "command-center-supabase-url",
+    ).rstrip("/")
+    service_key = credential(
+        "COMMAND_CENTER_SUPABASE_SERVICE_KEY",
+        "command-center-supabase-service",
+    )
+    user_id = credential(
+        "COMMAND_CENTER_SUPABASE_USER_ID",
+        "command-center-supabase-user",
+    )
+    request = urllib.request.Request(
+        f"{base_url}/rest/v1/command_center_scratchpad"
+        f"?user_id=eq.{urllib.parse.quote(user_id)}",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+        },
+        method="DELETE",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20):
+            pass
+    except urllib.error.HTTPError as exc:
+        raise IntegrationError(
+            f"Supabase Scratchpad returned HTTP {exc.code}."
+        ) from exc
+    return {"content": "", "updated_at": None}
 
 
 def http_json(url: str, token: str) -> Any:
@@ -2991,21 +3796,26 @@ def home(
     vault: Path,
     include_personal: bool,
     include_work: bool,
+    include_weekly: bool = True,
 ) -> dict[str, Any]:
     daily_tasks: dict[str, Any] = {}
+    rollover_date = date.today().isoformat()
+    generated_daily_tasks = list_daily_tasks(vault, rollover_date)
     if include_personal:
-        daily_tasks["personal"] = list_tasks(vault, "today", None)
+        daily_tasks["personal"] = generated_daily_tasks["personal"]
     if include_work:
-        daily_tasks["work"] = work_briefing(vault)["today"]
-    return {
+        daily_tasks["work"] = generated_daily_tasks["work"]
+    payload = {
         "morning": dashboard(vault),
-        "weekly": weekly_review(vault),
         "daily_tasks": daily_tasks,
         "daily_tasks_included": {
             "personal": include_personal,
             "work": include_work,
         },
     }
+    if include_weekly:
+        payload["weekly"] = weekly_review(vault)
+    return payload
 
 
 def exception_center(vault: Path) -> dict[str, Any]:
@@ -3160,6 +3970,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     task_complete = commands.add_parser("task-complete")
     task_complete.add_argument("--query", required=True)
+    task_complete.add_argument("--date")
 
     task_reschedule = commands.add_parser("task-reschedule")
     task_reschedule.add_argument("--query", required=True)
@@ -3204,6 +4015,14 @@ def build_parser() -> argparse.ArgumentParser:
     project_add.add_argument("--resend-domain", action="append", default=[])
     project_health_parser = commands.add_parser("project-health")
     project_health_parser.add_argument("--name")
+    project_health_set = commands.add_parser("project-health-set")
+    project_health_set.add_argument("--name", required=True)
+    project_health_set.add_argument(
+        "--health-check",
+        action="append",
+        required=True,
+    )
+    project_health_set.add_argument("--source", required=True)
 
     capture = commands.add_parser("capture")
     capture.add_argument("--text", required=True)
@@ -3239,6 +4058,9 @@ def build_parser() -> argparse.ArgumentParser:
     work_search = commands.add_parser("work-search")
     work_search.add_argument("--query", required=True)
     work_search.add_argument("--limit", type=int, default=50)
+    search_parser = commands.add_parser("search")
+    search_parser.add_argument("--query", required=True)
+    search_parser.add_argument("--limit", type=int, default=50)
     work_task_add = commands.add_parser("work-task-add")
     work_task_add.add_argument("--title", required=True)
     work_task_add.add_argument("--date", required=True)
@@ -3260,6 +4082,8 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("github")
     commands.add_parser("calendar-list")
     commands.add_parser("calendar-today")
+    calendar_upcoming_parser = commands.add_parser("calendar-upcoming")
+    calendar_upcoming_parser.add_argument("--minutes", type=int, default=15)
     calendar_range_parser = commands.add_parser("calendar-range")
     calendar_range_parser.add_argument("--days", type=int, default=14)
     calendar_add = commands.add_parser("calendar-add")
@@ -3267,10 +4091,26 @@ def build_parser() -> argparse.ArgumentParser:
     calendar_add.add_argument("--title", required=True)
     calendar_add.add_argument("--start", required=True)
     calendar_add.add_argument("--duration", type=int, default=60)
+    reminder_list = commands.add_parser("reminder-list")
+    reminder_list.add_argument("--list", default="Reminders")
+    reminder_add = commands.add_parser("reminder-add")
+    reminder_add.add_argument("--list", default="Reminders")
+    reminder_add.add_argument("--title", required=True)
+    reminder_add.add_argument("--date")
+    reminder_complete = commands.add_parser("reminder-complete")
+    reminder_complete.add_argument("--list", default="Reminders")
+    reminder_complete.add_argument("--id", required=True)
 
     mail = commands.add_parser("mail")
     mail.add_argument("--query")
+    mail.add_argument("--unread-only", action="store_true")
+    mail.add_argument("--account")
     commands.add_parser("bookit-business")
+    commands.add_parser("health-personal")
+    commands.add_parser("scratchpad-get")
+    scratchpad_set_parser = commands.add_parser("scratchpad-set")
+    scratchpad_set_parser.add_argument("--content", required=True)
+    commands.add_parser("scratchpad-clear")
     render_logs_parser = commands.add_parser("render-logs")
     render_logs_parser.add_argument("--name", required=True)
     render_logs_parser.add_argument("--limit", type=int, default=30)
@@ -3282,9 +4122,15 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("weekly-review")
     commands.add_parser("dashboard")
     commands.add_parser("exceptions")
+    daily_rollover_parser = commands.add_parser("daily-rollover")
+    daily_rollover_parser.add_argument("--date", default=date.today().isoformat())
+    daily_tasks_parser = commands.add_parser("daily-tasks")
+    daily_tasks_parser.add_argument("--date", default=date.today().isoformat())
+    daily_tasks_parser.add_argument("--include-completed", action="store_true")
     home_parser = commands.add_parser("home")
     home_parser.add_argument("--include-personal", action="store_true")
     home_parser.add_argument("--include-work", action="store_true")
+    home_parser.add_argument("--morning-only", action="store_true")
     return parser
 
 
@@ -3306,7 +4152,7 @@ def main() -> None:
                 )
             )
         elif args.command == "task-complete":
-            emit(complete_task(vault, args.query))
+            emit(complete_task(vault, args.query, args.date))
         elif args.command == "task-reschedule":
             emit(reschedule_task(vault, args.query, args.date))
         elif args.command == "project-list":
@@ -3359,6 +4205,15 @@ def main() -> None:
             )
         elif args.command == "project-health":
             emit({"checks": project_health(vault, args.name)})
+        elif args.command == "project-health-set":
+            emit(
+                set_project_health_checks(
+                    vault,
+                    args.name,
+                    args.health_check,
+                    args.source,
+                )
+            )
         elif args.command == "capture":
             emit(capture_note(vault, args.text, args.source, args.project))
         elif args.command == "inbox-list":
@@ -3408,6 +4263,8 @@ def main() -> None:
             emit(read_work_note(vault, args.path))
         elif args.command == "work-search":
             emit({"matches": search_work(vault, args.query, args.limit)})
+        elif args.command == "search":
+            emit({"results": search_all(vault, args.query, args.limit)})
         elif args.command == "work-task-add":
             emit(add_work_task(vault, args.title, args.date))
         elif args.command == "work-task-complete":
@@ -3422,6 +4279,8 @@ def main() -> None:
             emit({"calendars": calendar_names()})
         elif args.command == "calendar-today":
             emit({"events": calendar_today()})
+        elif args.command == "calendar-upcoming":
+            emit({"events": calendar_upcoming(args.minutes)})
         elif args.command == "calendar-range":
             emit({"events": calendar_range(args.days)})
         elif args.command == "calendar-add":
@@ -3433,10 +4292,46 @@ def main() -> None:
                     args.duration,
                 )
             )
+        elif args.command == "reminder-list":
+            emit({"reminders": list_reminders(vault, args.list)})
+        elif args.command == "reminder-add":
+            if args.date:
+                validate_iso_date(args.date)
+            emit(
+                {
+                    "id": add_reminder_item(
+                        args.list,
+                        " ".join(args.title.split()),
+                        args.date,
+                    ),
+                    "title": " ".join(args.title.split()),
+                    "list": args.list,
+                    "date": args.date,
+                    "status": "open",
+                }
+            )
+        elif args.command == "reminder-complete":
+            emit(complete_reminder(vault, args.list, args.id))
         elif args.command == "mail":
-            emit({"messages": mail_attention(args.query)})
+            emit(
+                {
+                    "messages": mail_attention(
+                        args.query,
+                        args.unread_only,
+                        args.account,
+                    )
+                }
+            )
         elif args.command == "bookit-business":
             emit(bookit_business())
+        elif args.command == "health-personal":
+            emit(personal_health())
+        elif args.command == "scratchpad-get":
+            emit(scratchpad_get())
+        elif args.command == "scratchpad-set":
+            emit(scratchpad_set(args.content))
+        elif args.command == "scratchpad-clear":
+            emit(scratchpad_clear())
         elif args.command == "render-logs":
             emit(
                 render_logs(
@@ -3455,8 +4350,25 @@ def main() -> None:
             emit(dashboard(vault))
         elif args.command == "exceptions":
             emit(exception_center(vault))
+        elif args.command == "daily-rollover":
+            emit(daily_rollover(vault, args.date))
+        elif args.command == "daily-tasks":
+            emit(
+                list_daily_tasks(
+                    vault,
+                    args.date,
+                    args.include_completed,
+                )
+            )
         elif args.command == "home":
-            emit(home(vault, args.include_personal, args.include_work))
+            emit(
+                home(
+                    vault,
+                    args.include_personal,
+                    args.include_work,
+                    not args.morning_only,
+                )
+            )
         else:
             parser.error(f"Unknown command: {args.command}")
     except CommandCenterError as exc:

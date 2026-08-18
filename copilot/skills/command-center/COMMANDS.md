@@ -16,6 +16,10 @@ python3 scripts/command_center.py dashboard
 python3 scripts/command_center.py exceptions
 python3 scripts/command_center.py home
 python3 scripts/command_center.py home --include-personal --include-work
+python3 scripts/command_center.py home \
+  --include-personal --include-work --morning-only
+python3 scripts/command_center.py daily-rollover
+python3 scripts/command_center.py daily-tasks
 python3 scripts/command_center.py task-list --view action
 python3 scripts/command_center.py task-list --view today
 python3 scripts/command_center.py task-list --view overdue
@@ -28,9 +32,20 @@ python3 scripts/command_center.py project-health
 python3 scripts/command_center.py weekly-review
 python3 scripts/command_center.py github
 python3 scripts/command_center.py calendar-today
+python3 scripts/command_center.py calendar-upcoming --minutes 15
 python3 scripts/command_center.py calendar-range --days 14
+python3 scripts/command_center.py reminder-list
+python3 scripts/command_center.py reminder-add \
+  --title "Να ελέγξω τα τιμολόγια" \
+  --date 2026-08-19
+python3 scripts/command_center.py reminder-complete --id "x-apple-reminder://..."
+python3 scripts/command_center.py scratchpad-get
+python3 scripts/command_center.py scratchpad-set --content "Σημείωση"
+python3 scripts/command_center.py scratchpad-clear
 python3 scripts/command_center.py mail
 python3 scripts/command_center.py mail --query "invoice"
+python3 scripts/command_center.py mail \
+  --account "liakos.koulaxis@yahoo.com"
 
 # Generate a local briefing immediately
 python3 scripts/briefing_scheduler.py morning
@@ -38,6 +53,15 @@ python3 scripts/briefing_scheduler.py weekly
 
 # Install macOS LaunchAgents: daily 08:30 and Monday 08:30
 python3 scripts/install_briefing_schedule.py
+
+# Install and open the localhost-only web dashboard
+python3 scripts/install_web_dashboard.py
+
+# After Supabase/GitHub OAuth setup
+python3 scripts/configure_cloud_sync.py \
+  --url "https://PROJECT.supabase.co" \
+  --user-id "SUPABASE_AUTH_USER_UUID"
+python3 scripts/install_cloud_sync.py
 ```
 
 `dashboard` surfaces integration failures in its `errors` object. Report them;
@@ -47,6 +71,41 @@ Scheduled briefings are stored privately under
 `~/Library/Application Support/Command Center/Briefings/`, not in the Obsidian
 vault. The morning briefing includes urgent items, calls, calendar entries,
 Reminders, and mirrored todos for today.
+Nested Work tasks include their parent path in JSON output and briefing previews.
+The native Briefing Window opens automatically after a scheduled briefing is
+generated; the notification remains available as a reminder.
+The installer also registers a one-minute local watcher that sends one
+notification 15 minutes before every timed Calendar event. It includes the local
+Greek time and a Google Meet URL when Calendar exposes one in the event URL or
+description.
+
+The local dashboard listens only on `http://127.0.0.1:4317`. Its LaunchAgent
+starts it at login and keeps it running. Browser code receives data through
+independent CLI-backed endpoints and never reads or edits the vault directly.
+Writes for tasks, reminders, Learning, captures, and Calendar events route through
+the CLI so Markdown and macOS integrations remain synchronized.
+Pending Learning items and metadata-only messages received in the last 48 hours
+by `liakos.koulaxis@yahoo.com` load in independent panels.
+Learning is grouped into Books, Articles, and Videos. Dashboard removal calls
+`learning-complete`, preserving history rather than deleting the item.
+Mail cards open the exact local message in Apple Mail. Agenda Join actions support
+Google Meet, Microsoft Teams, and Zoom URLs exposed by Calendar.
+The Reminders panel reads and mutates only the `Reminders` list. Completing a
+task-synced reminder routes through task completion; standalone reminders are
+completed directly in macOS Reminders.
+
+`cloud/` contains the Vercel web app and Supabase schemas. The owner-only Mac
+agent publishes the approved snapshot every 60 seconds and executes allowlisted
+Personal/Work task, Reminder, Learning, and Calendar commands. It never uploads
+Mail bodies, complete Work notes, local paths, or credentials.
+
+`daily-rollover` creates:
+
+- `Command Center/Daily Tasks/<N. Month YYYY>/<YYYY-MM-DD>.md`
+- `Work/Daily Notes/<N. Month YYYY>/<YYYY-MM-DD>.md`
+
+It carries forward only incomplete, deduplicated checkbox lines from the previous
+date and never overwrites an existing daily file.
 
 ## Task mutations
 
@@ -168,6 +227,11 @@ of the exact text and path before execution.
 ```bash
 python3 scripts/command_center.py project-health
 python3 scripts/command_center.py project-health --name Fitcoach
+python3 scripts/command_center.py project-health-set \
+  --name BookIt \
+  --health-check "Frontend|https://bookit.fyi" \
+  --health-check "API health|https://api.bookit.fyi/healthz" \
+  --source "Χρήστης (chat) · backend/src/main.rs"
 python3 scripts/command_center.py bookit-business
 python3 scripts/command_center.py render-logs --name BookIt --limit 30
 python3 scripts/command_center.py render-logs \

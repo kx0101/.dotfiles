@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="el">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark light">
+    <title>Command Center</title>
+    <script type="module" src="/src/main.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">COMMAND CENTER</p>
+          <h1 id="greeting">Καλημέρα</h1>
+          <p id="today" class="muted"></p>
+        </div>
+        <div class="topbar-actions">
+          <label class="toggle">
+            <input id="show-personal" type="checkbox" checked>
+            <span>Προσωπικά</span>
+          </label>
+          <label class="toggle">
+            <input id="show-work" type="checkbox" checked>
+            <span>Δουλειά</span>
+          </label>
+          <button id="open-search" type="button">Αναζήτηση ⌘K</button>
+          <button id="refresh" type="button">Ανανέωση</button>
+        </div>
+      </header>
+
+      <section id="status" class="status">Φόρτωση Command Center…</section>
+
+      <form id="capture-form" class="capture-bar hidden">
+          <input
+            id="capture-title"
+            name="title"
+            type="text"
+            maxlength="1000"
+            placeholder="Κατάγραψε task, reminder, learning ή σημείωση…"
+            autocomplete="off"
+            required
+          >
+          <select id="capture-kind" name="kind" aria-label="Τύπος capture">
+            <option value="personal-task">Προσωπική εργασία</option>
+            <option value="work-task">Εργασία δουλειάς</option>
+            <option value="reminder">Υπενθύμιση</option>
+            <option value="book">Βιβλίο</option>
+            <option value="article">Άρθρο</option>
+            <option value="video">Βίντεο</option>
+            <option value="project-note" disabled>Σημείωση έργου</option>
+          </select>
+          <input id="capture-date" name="date" type="date">
+          <input
+            id="capture-url"
+            class="hidden"
+            name="url"
+            type="url"
+            maxlength="2000"
+            placeholder="URL"
+          >
+          <select
+            id="capture-project"
+            class="hidden"
+            name="project"
+            aria-label="Project"
+          >
+            <option value="">Χωρίς έργο</option>
+          </select>
+          <button type="submit">Καταγραφή</button>
+      </form>
+
+      <section id="app" class="view hidden">
+          <div class="dashboard-grid">
+            <section class="panel span-2 scratchpad-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">ΣΗΜΕΙΩΜΑΤΑΡΙΟ</p>
+                  <h2>Ελεύθερη σημείωση</h2>
+                </div>
+                <div class="scratchpad-actions">
+                  <span id="scratchpad-status" class="item-meta"></span>
+                  <button id="clear-scratchpad" type="button">Καθαρισμός</button>
+                </div>
+              </div>
+              <textarea
+                id="scratchpad"
+                maxlength="20000"
+                placeholder="Γράψε κάτι που θέλεις να μείνει εδώ…"
+              ></textarea>
+            </section>
+
+            <section class="panel span-2">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">ΣΗΜΕΡΑ</p>
+                  <h2>Πρόγραμμα</h2>
+                </div>
+                <button id="open-event" type="button">Νέο event</button>
+              </div>
+              <div id="agenda" class="list"></div>
+            </section>
+
+            <section class="panel span-2">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">ΥΠΕΝΘΥΜΙΣΕΙΣ</p>
+                  <h2>Υπενθυμίσεις</h2>
+                </div>
+              </div>
+              <div id="reminders" class="reminder-list"></div>
+            </section>
+
+            <section id="work-panel" class="panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">ΕΣΤΙΑΣΗ</p>
+                  <h2>Δουλειά σήμερα</h2>
+                </div>
+              </div>
+              <div id="work-tree" class="task-tree"></div>
+            </section>
+
+            <section id="personal-panel" class="panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">ΠΡΟΣΩΠΙΚΑ</p>
+                  <h2>Σήμερα</h2>
+                </div>
+              </div>
+              <div id="personal-tasks" class="list"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">ΣΥΣΤΗΜΑΤΑ</p>
+                  <h2>Κατάσταση</h2>
+                </div>
+              </div>
+              <div id="health" class="list"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">EMAIL</p>
+                  <h2>Πρόσφατα email</h2>
+                </div>
+              </div>
+              <div id="mail" class="list"></div>
+            </section>
+
+            <section class="panel span-2">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">ΓΙΑ ΑΡΓΟΤΕΡΑ</p>
+                  <h2>Μάθηση</h2>
+                </div>
+              </div>
+              <div id="learning-tabs" class="learning-tabs">
+                <button class="learning-tab active" data-kind="book" type="button">Βιβλία</button>
+                <button class="learning-tab" data-kind="article" type="button">Άρθρα</button>
+                <button class="learning-tab" data-kind="video" type="button">Βίντεο</button>
+              </div>
+              <div id="learning" class="learning-list"></div>
+            </section>
+
+            <section class="panel span-2">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">ΕΝΕΡΓΑ</p>
+                  <h2>Έργα</h2>
+                </div>
+              </div>
+              <div id="projects" class="project-grid"></div>
+            </section>
+
+            <section class="panel span-2">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">ΠΡΟΣΩΠΙΚΗ ΥΓΕΙΑ</p>
+                  <h2>Apple Health</h2>
+                </div>
+              </div>
+              <div id="apple-health" class="health-metrics"></div>
+            </section>
+          </div>
+      </section>
+
+      <dialog id="project-dialog">
+        <div class="dialog-header">
+          <div>
+            <p class="eyebrow">ΕΡΓΟ</p>
+            <h2 id="project-title">Έργο</h2>
+          </div>
+          <button id="close-project" type="button" aria-label="Κλείσιμο">Κλείσιμο</button>
+        </div>
+        <div id="project-detail" class="project-detail"></div>
+      </dialog>
+
+      <dialog id="search-dialog" class="search-dialog">
+        <form id="search-form" class="search-form">
+          <input
+            id="search-query"
+            type="search"
+            minlength="2"
+            maxlength="200"
+            placeholder="Αναζήτηση παντού…"
+            autocomplete="off"
+            required
+          >
+          <button type="submit">Αναζήτηση</button>
+          <button id="close-search" type="button">Κλείσιμο</button>
+        </form>
+        <div id="search-results" class="search-results"></div>
+      </dialog>
+
+      <dialog id="event-dialog" class="event-dialog">
+        <div class="dialog-header">
+          <div>
+            <p class="eyebrow">ΗΜΕΡΟΛΟΓΙΟ</p>
+            <h2>Νέο συμβάν</h2>
+          </div>
+          <button id="close-event" type="button">Κλείσιμο</button>
+        </div>
+        <form id="event-form" class="event-form">
+          <label>
+            Τίτλος
+            <input id="event-title" type="text" maxlength="300" required>
+          </label>
+          <label>
+            Ημερολόγιο
+            <select id="event-calendar" required>
+              <option value="">Διαθέσιμο στο Mac</option>
+            </select>
+          </label>
+          <label>
+            Έναρξη
+            <input id="event-start" type="datetime-local" required>
+          </label>
+          <label>
+            Διάρκεια
+            <select id="event-duration">
+              <option value="60">60 λεπτά</option>
+            </select>
+          </label>
+          <button type="submit">Δημιουργία συμβάντος</button>
+        </form>
+      </dialog>
+    </main>
+    <section id="access-denied" class="access-denied hidden">
+      <span class="access-x">×</span>
+      <h1>ΑΠΑΓΟΡΕΥΕΤΑΙ Η ΠΡΟΣΒΑΣΗ</h1>
+      <p>Αυτό το Command Center είναι ιδιωτικό.</p>
+    </section>
+  </body>
+</html>
