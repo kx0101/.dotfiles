@@ -25,6 +25,10 @@ sections, in this order:
 
 Keep the response compact: one bullet per item and no narrative recap.
 
+The opening surface is `home`: it combines the morning dashboard with the weekly
+review. Personal and Work daily tasks are optional sections and are included only
+when the user asks for them or the application preference enables them.
+
 ## Tasks
 
 `Command Center/Tasks.md` is the source of truth for personal/project tasks and
