@@ -121,7 +121,9 @@ python3 scripts/command_center.py work-task-add \
   --title "Να ελέγξω το PR" \
   --date 2026-08-19
 
-python3 scripts/command_center.py work-task-complete --query "ελέγξω το PR"
+python3 scripts/command_center.py work-task-complete \
+  --query "ελέγξω το PR" \
+  --date 2026-08-19
 python3 scripts/command_center.py work-task-reschedule \
   --query "ελέγξω το PR" \
   --date 2026-08-20

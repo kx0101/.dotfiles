@@ -2215,12 +2215,15 @@ def add_work_task(vault: Path, title: str, task_date: str) -> dict[str, Any]:
     }
 
 
-def complete_work_task(vault: Path, query: str) -> dict[str, Any]:
+def complete_work_task(
+    vault: Path, query: str, task_date: str | None = None
+) -> dict[str, Any]:
     normalized = query.casefold().strip()
     matches = [
         task
         for task in parse_work_tasks(vault)
         if not task.completed
+        and (task_date is None or task.task_date == task_date)
         and (
             task.managed
             or task.title.casefold() == normalized
@@ -2897,6 +2900,7 @@ def build_parser() -> argparse.ArgumentParser:
     work_task_add.add_argument("--date", required=True)
     work_task_complete = commands.add_parser("work-task-complete")
     work_task_complete.add_argument("--query", required=True)
+    work_task_complete.add_argument("--date")
     work_task_reschedule = commands.add_parser("work-task-reschedule")
     work_task_reschedule.add_argument("--query", required=True)
     work_task_reschedule.add_argument("--date", required=True)
@@ -3046,7 +3050,7 @@ def main() -> None:
         elif args.command == "work-task-add":
             emit(add_work_task(vault, args.title, args.date))
         elif args.command == "work-task-complete":
-            emit(complete_work_task(vault, args.query))
+            emit(complete_work_task(vault, args.query, args.date))
         elif args.command == "work-task-reschedule":
             emit(reschedule_work_task(vault, args.query, args.date))
         elif args.command == "work-append":
