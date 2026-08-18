@@ -332,6 +332,11 @@ function renderLearning(items) {
 
 function renderProjects(projects) {
   const lifecycleOrder = { live: 0, development: 1, planned: 2 };
+  const lifecycleLabels = {
+    live: "Σε λειτουργία",
+    development: "Σε ανάπτυξη",
+    planned: "Σχεδιασμένο",
+  };
   const sorted = [...projects].sort((first, second) => {
     const lifecycle =
       (lifecycleOrder[first.lifecycle] ?? 99) -
@@ -362,7 +367,11 @@ function renderProjects(projects) {
     card.type = "button";
     card.append(
       element("strong", "", project.name),
-      element("span", "item-meta", project.lifecycle),
+      element(
+        "span",
+        "item-meta",
+        lifecycleLabels[project.lifecycle] ?? project.lifecycle,
+      ),
     );
     card.addEventListener("click", () => openProject(project));
     container.append(card);
@@ -372,7 +381,7 @@ function renderProjects(projects) {
 function renderCaptureParents() {
   const select = $("#capture-parent");
   const selected = select.value;
-  select.replaceChildren(new Option("Νέο parent", ""));
+  select.replaceChildren(new Option("Νέο κύριο todo", ""));
   const kind = $("#capture-kind").value;
   if (
     !["personal-task", "work-task"].includes(kind) ||
@@ -520,9 +529,9 @@ function openProject(project) {
     const businessStats = element("div", "business-grid");
     for (const [label, value] of [
       ["MRR", money.format((metrics.mrr_cents ?? 0) / 100)],
-      ["Active", String(metrics.active ?? 0)],
-      ["Trials", String(metrics.trialing ?? 0)],
-      ["Cancelling", String(metrics.cancelling ?? 0)],
+      ["Ενεργές", String(metrics.active ?? 0)],
+      ["Δοκιμές", String(metrics.trialing ?? 0)],
+      ["Υπό ακύρωση", String(metrics.cancelling ?? 0)],
     ]) {
       const card = element("div", "business-stat");
       card.append(
@@ -537,15 +546,15 @@ function openProject(project) {
     const billingRows = [
       ...(business.attention ?? []).map((item) => ({
         ...item,
-        state: "Attention",
+        state: "Προσοχή",
       })),
       ...(business.cancelling ?? []).map((item) => ({
         ...item,
-        state: "Cancelling",
+        state: "Ακύρωση",
       })),
       ...(business.renewing_soon ?? []).map((item) => ({
         ...item,
-        state: "Renewal",
+        state: "Ανανέωση",
       })),
     ];
     if (billingRows.length) {
@@ -857,7 +866,7 @@ function renderSyncStatus(payload) {
   summary.replaceChildren();
   for (const [label, value] of [
     [
-      "Τελευταίο snapshot",
+      "Τελευταίο στιγμιότυπο",
       payload.last_snapshot_at
         ? formatGreekDateTime(payload.last_snapshot_at)
         : "Ποτέ",
@@ -1344,7 +1353,7 @@ async function refresh() {
     renderScratchpad(snapshot?.payload?.scratchpad ?? null);
     $("#scratchpad").readOnly = true;
     document.body.classList.add("history-mode");
-    $("#history-mode").textContent = `Snapshot ${selectedDate}`;
+    $("#history-mode").textContent = `Στιγμιότυπο ${selectedDate}`;
     setStatus(
       snapshot
         ? `Ιστορικό snapshot ${selectedDate}`

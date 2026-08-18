@@ -901,6 +901,14 @@ def delete_task(
 ) -> dict[str, Any]:
     validate_iso_date(action_date)
     normalized = " ".join(query.split()).casefold()
+    immediate_children = [
+        item
+        for item in list_daily_tasks(vault, action_date, True)["personal"]
+        if item.get("parent_path")
+        and item["parent_path"][-1].casefold() == normalized
+    ]
+    for child in immediate_children:
+        delete_task(vault, child["title"], action_date)
     tasks_path = vault / TASKS_RELATIVE_PATH
     with path_lock(tasks_path):
         matches = [
@@ -916,16 +924,6 @@ def delete_task(
                 [asdict(task) for task in matches],
             )
         task = matches[0]
-        descendants = [
-            item
-            for item in list_daily_tasks(vault, action_date, True)["personal"]
-            if task.title in item.get("parent_path", [])
-        ]
-        if descendants:
-            raise CommandCenterError(
-                "Delete child todos before deleting their parent.",
-                descendants,
-            )
         if task.calendar_uid:
             if (task.sync_provider or "reminders") == "reminders":
                 delete_reminder_item(
@@ -2006,7 +2004,7 @@ def calendar_today() -> list[dict[str, Any]]:
     return events
 
 
-def delete_calendar_event(calendar: str, event_uid: str) -> None:
+def delete_calendar_event(calendar: str, event_uid: str) -> bool:
     script = r'''
 on run argv
     set calendarName to item 1 of argv
@@ -2019,10 +2017,16 @@ on run argv
     end tell
 end run
 '''
-    run_osascript(script, [calendar, event_uid])
+    try:
+        run_osascript(script, [calendar, event_uid])
+        return True
+    except IntegrationError as exc:
+        if "Calendar event not found" in str(exc):
+            return False
+        raise
 
 
-def delete_calendar_event_by_ref(calendar: str, calendar_ref: str) -> None:
+def delete_calendar_event_by_ref(calendar: str, calendar_ref: str) -> bool:
     script = r'''
 on run argv
     set calendarName to item 1 of argv
@@ -2035,10 +2039,16 @@ on run argv
     end tell
 end run
 '''
-    run_osascript(script, [calendar, calendar_ref])
+    try:
+        run_osascript(script, [calendar, calendar_ref])
+        return True
+    except IntegrationError as exc:
+        if "Calendar todo not found" in str(exc):
+            return False
+        raise
 
 
-def delete_reminder_item(list_name: str, reminder_id: str) -> None:
+def delete_reminder_item(list_name: str, reminder_id: str) -> bool:
     script = r'''
 on run argv
     set listName to item 1 of argv
@@ -2051,7 +2061,13 @@ on run argv
     end tell
 end run
 '''
-    run_osascript(script, [list_name, reminder_id])
+    try:
+        run_osascript(script, [list_name, reminder_id])
+        return True
+    except IntegrationError as exc:
+        if "Reminder not found" in str(exc):
+            return False
+        raise
 
 
 def delete_agenda_item(
@@ -3305,6 +3321,54 @@ def open_daily_lines(path: Path) -> list[str]:
     return lines
 
 
+def daily_line_identity(line: str) -> str | None:
+    match = DAILY_TASK_PATTERN.match(line)
+    if not match:
+        return None
+    title = CALENDAR_METADATA_PATTERN.sub("", match.group("title")).strip()
+    return title.casefold()
+
+
+def merge_daily_lines(
+    path: Path,
+    carried_lines: list[str],
+    *,
+    personal: bool,
+) -> int:
+    if not carried_lines:
+        return 0
+    with path_lock(path):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        existing = {
+            identity
+            for line in lines
+            if (identity := daily_line_identity(line))
+        }
+        missing = [
+            line
+            for line in carried_lines
+            if (identity := daily_line_identity(line))
+            and identity not in existing
+        ]
+        if not missing:
+            return 0
+        if personal:
+            insertion = 2 if lines and lines[0].startswith("# ") else 0
+        else:
+            insertion = next(
+                (
+                    index
+                    for index, line in enumerate(lines)
+                    if line == "## Command Center"
+                ),
+                len(lines),
+            )
+        block = missing + [""]
+        lines[insertion:insertion] = block
+        atomic_write(path, "\n".join(lines).rstrip() + "\n")
+    return len(missing)
+
+
 def ensure_personal_daily_file(vault: Path, target_date: date) -> tuple[Path, bool]:
     path = personal_daily_path(vault, target_date)
     with path_lock(path):
@@ -3527,6 +3591,11 @@ def daily_rollover(vault: Path, target_date: str) -> dict[str, Any]:
     created: dict[str, Any] = {"date": target_date, "created": []}
 
     personal_path, personal_created = ensure_personal_daily_file(vault, current)
+    personal_carried = merge_daily_lines(
+        personal_path,
+        open_daily_lines(personal_daily_path(vault, previous)),
+        personal=True,
+    )
     if personal_created:
         lines = open_daily_lines(personal_path)
         if not lines:
@@ -3545,19 +3614,32 @@ def daily_rollover(vault: Path, target_date: str) -> dict[str, Any]:
                 "carried": len(lines),
             }
         )
+    elif personal_carried:
+        created["created"].append(
+            {
+                "area": "Personal",
+                "path": str(personal_path.relative_to(vault)),
+                "carried": personal_carried,
+                "merged": True,
+            }
+        )
 
-    if not work_path.exists():
-        previous_path = work_daily_path(vault, previous)
-        lines = open_daily_lines(previous_path)
+    work_created = not work_path.exists()
+    if work_created:
         work_path.parent.mkdir(parents=True, exist_ok=True)
-        content = f"# Work daily tasks — {target_date}\n\n"
-        content += "\n".join(lines) + ("\n" if lines else "")
-        atomic_write(work_path, content)
+        atomic_write(work_path, "")
+    work_carried = merge_daily_lines(
+        work_path,
+        open_daily_lines(work_daily_path(vault, previous)),
+        personal=False,
+    )
+    if work_created or work_carried:
         created["created"].append(
             {
                 "area": "Work",
                 "path": str(work_path.relative_to(vault)),
-                "carried": len(lines),
+                "carried": work_carried,
+                "merged": not work_created,
             }
         )
     return created
@@ -3884,6 +3966,14 @@ def delete_work_task(
 ) -> dict[str, Any]:
     validate_iso_date(task_date)
     normalized = query.casefold().strip()
+    immediate_children = [
+        item
+        for item in list_daily_tasks(vault, task_date, True)["work"]
+        if item.get("parent_path")
+        and item["parent_path"][-1].casefold() == normalized
+    ]
+    for child in immediate_children:
+        delete_work_task(vault, child["title"], task_date)
     matches = [
         task
         for task in parse_work_tasks(vault)
@@ -3897,16 +3987,6 @@ def delete_work_task(
             [asdict(task) for task in matches],
         )
     task = matches[0]
-    descendants = [
-        item
-        for item in list_daily_tasks(vault, task_date, True)["work"]
-        if task.title in item.get("parent_path", [])
-    ]
-    if descendants:
-        raise CommandCenterError(
-            "Delete child Work todos before deleting their parent.",
-            descendants,
-        )
     if task.calendar_uid:
         delete_calendar_event_by_ref(
             task.calendar_name or "Work",

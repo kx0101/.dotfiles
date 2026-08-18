@@ -33,7 +33,7 @@
 
       <nav class="history-toolbar" aria-label="Ημερήσιο αρχείο">
         <button id="history-previous" type="button">←</button>
-        <input id="history-date" type="date" aria-label="Ημερομηνία snapshot">
+        <input id="history-date" type="date" aria-label="Ημερομηνία στιγμιότυπου">
         <button id="history-next" type="button">→</button>
         <button id="history-today" type="button">Σήμερα</button>
         <span id="history-mode" class="item-meta">Ζωντανή προβολή</span>
@@ -50,8 +50,8 @@
             required
           >
           <select id="capture-kind" name="kind" aria-label="Τύπος capture">
-            <option value="personal-task">Todo · Personal</option>
-            <option value="work-task">Todo · Work</option>
+            <option value="personal-task">Todo στα Προσωπικά</option>
+            <option value="work-task">Todo στη Δουλειά</option>
             <option value="reminder">Υπενθύμιση</option>
             <option value="book">Βιβλίο</option>
             <option value="article">Άρθρο</option>
@@ -81,7 +81,7 @@
             name="parent"
             aria-label="Parent todo"
           >
-            <option value="">Νέο parent</option>
+            <option value="">Νέο κύριο todo</option>
           </select>
           <button type="submit">Καταγραφή</button>
       </form>
@@ -130,8 +130,8 @@
             <section id="work-panel" class="panel">
               <div class="panel-heading">
                 <div>
-                  <p class="eyebrow">ΕΣΤΙΑΣΗ</p>
-                  <h2>Δουλειά σήμερα</h2>
+                  <p class="eyebrow">ΔΟΥΛΕΙΑ</p>
+                  <h2>Σημερινές εργασίες</h2>
                 </div>
               </div>
               <div id="work-tree" class="task-tree"></div>
@@ -141,7 +141,7 @@
               <div class="panel-heading">
                 <div>
                   <p class="eyebrow">ΠΡΟΣΩΠΙΚΑ</p>
-                  <h2>Σήμερα</h2>
+                  <h2>Σημερινές εργασίες</h2>
                 </div>
               </div>
               <div id="personal-tasks" class="list"></div>

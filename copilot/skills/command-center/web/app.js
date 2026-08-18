@@ -260,7 +260,7 @@ function renderSyncStatus(payload) {
   summary.replaceChildren();
   for (const [label, value] of [
     [
-      "Τελευταίο snapshot",
+      "Τελευταίο στιγμιότυπο",
       payload.last_snapshot_at
         ? formatGreekDateTime(payload.last_snapshot_at)
         : "Ποτέ",
@@ -453,6 +453,12 @@ function renderProjects(projects) {
     developing: 1,
     planned: 2,
   };
+  const lifecycleLabels = {
+    live: "Σε λειτουργία",
+    development: "Σε ανάπτυξη",
+    developing: "Σε ανάπτυξη",
+    planned: "Σχεδιασμένο",
+  };
   const active = projects
     .filter((project) => project.status === "active")
     .sort((first, second) => {
@@ -482,7 +488,9 @@ function renderProjects(projects) {
       element(
         "span",
         "item-meta",
-        `${project.lifecycle ?? "active"} · ${project.area ?? "personal"}`,
+        `${lifecycleLabels[project.lifecycle] ?? project.lifecycle ?? "Ενεργό"} · ${
+          project.area === "personal" ? "Προσωπικά" : "Δουλειά"
+        }`,
       ),
     );
     card.addEventListener("click", () => openProject(project.name));
@@ -501,7 +509,7 @@ function renderTasks() {
 function renderCaptureParents() {
   const select = $("#capture-parent");
   const selected = select.value;
-  select.replaceChildren(new Option("Νέο parent", ""));
+  select.replaceChildren(new Option("Νέο κύριο todo", ""));
   const kind = $("#capture-kind").value;
   const now = new Date();
   const today = new Date(
@@ -632,9 +640,9 @@ function renderBookItBusiness(business, emailPayload) {
     const stats = element("div", "business-grid");
     const values = [
       ["MRR", money.format((metrics.mrr_cents ?? 0) / 100)],
-      ["Active", String(metrics.active ?? 0)],
-      ["Trials", String(metrics.trialing ?? 0)],
-      ["Cancelling", String(metrics.cancelling ?? 0)],
+      ["Ενεργές", String(metrics.active ?? 0)],
+      ["Δοκιμές", String(metrics.trialing ?? 0)],
+      ["Υπό ακύρωση", String(metrics.cancelling ?? 0)],
     ];
     for (const [label, value] of values) {
       const card = element("div", "business-stat");
@@ -650,15 +658,15 @@ function renderBookItBusiness(business, emailPayload) {
     const rows = [
       ...(business.attention ?? []).map((item) => ({
         ...item,
-        state: "Attention",
+        state: "Προσοχή",
       })),
       ...(business.cancelling ?? []).map((item) => ({
         ...item,
-        state: "Cancelling",
+        state: "Ακύρωση",
       })),
       ...(business.renewing_soon ?? []).map((item) => ({
         ...item,
-        state: "Renewal",
+        state: "Ανανέωση",
       })),
     ];
     if (rows.length) {

@@ -64,8 +64,8 @@ Task and Reminder edits must route through the corresponding update command so
 title/date changes propagate to Markdown and macOS. Historical snapshot views are
 read-only.
 Todo deletion removes its provider item and marks Markdown `→ διαγράφηκε`.
-Delete children before their parent. Keep rows locked while an entity has a
-pending/processing cloud command.
+Deleting a parent cascades through every child. Keep rows locked while an entity
+has a pending/processing cloud command.
 
 The Learning panel has separate Books, Articles, and Videos views. Additions must
 use `learning-add`; removal from the pending view must use `learning-complete`,

@@ -125,7 +125,11 @@ prevents rapid checkbox clicks from queuing contradictory complete/reopen action
 
 Todo deletion is a soft delete: the provider item is removed, Markdown is marked
 `→ διαγράφηκε`, the active dashboard hides it, and audit/history retain it.
-Parents with children must have their children deleted first.
+Deleting a parent recursively soft-deletes all descendants before the parent.
+
+Daily rollover merges missing incomplete lines into an existing target note as
+well as creating new notes. A file created early by rescheduling must not block
+the next day's carry-forward.
 
 The sync panel shows current snapshot time and pending/processing/failed counts.
 Successful mutations append audit events with `cli`, `local-web`, or `vercel`
