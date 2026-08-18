@@ -7,6 +7,7 @@ const configured = Boolean(supabaseUrl && supabaseKey);
 const supabase = configured ? createClient(supabaseUrl, supabaseKey) : null;
 const $ = (selector) => document.querySelector(selector);
 const OWNER_USER_ID = "4965a34f-c6b6-45ec-b595-d9f14f7a9294";
+const CHAT_STORAGE_KEY = "command-center-chat-v2";
 
 let session = null;
 let learningKind = "book";
@@ -16,6 +17,7 @@ let scratchpadTimer = null;
 let selectedDate = localDate();
 let availableSnapshots = [];
 let chatMessages = [];
+let chatPending = false;
 
 function localDate(value = new Date()) {
   return new Date(value.getTime() - value.getTimezoneOffset() * 60_000)
@@ -60,21 +62,92 @@ function setStatus(message) {
   $("#status").replaceChildren(element("span", "", message));
 }
 
+function pendingActionLabel(action, payload = {}) {
+  if (action === "add-calendar-event" && payload.operation === "update") {
+    return "Επεξεργασία Calendar event";
+  }
+  return {
+    "add-personal-task": "Personal task",
+    "add-work-task": "Work task",
+    "add-reminder": "Reminder",
+    "add-learning": "Learning",
+    "add-project-note": "Σημείωση έργου",
+    "add-calendar-event": "Calendar event",
+    "update-calendar-event": "Επεξεργασία Calendar event",
+    "complete-personal-task": "Ολοκλήρωση Personal task",
+    "complete-work-task": "Ολοκλήρωση Work task",
+    "complete-reminder": "Ολοκλήρωση Reminder",
+    "complete-learning": "Ολοκλήρωση Learning",
+    "update-personal-task": "Επεξεργασία Personal task",
+    "update-work-task": "Επεξεργασία Work task",
+    "update-reminder": "Επεξεργασία Reminder",
+    "delete-personal-task": "Διαγραφή Personal task",
+    "delete-work-task": "Διαγραφή Work task",
+    "delete-agenda-item": "Διαγραφή από Πρόγραμμα",
+    "archive-project-note": "Αρχειοθέτηση σημείωσης",
+  }[action] ?? action;
+}
+
+function renderPendingQueue(commands) {
+  const container = $("#pending-queue");
+  container.replaceChildren();
+  container.classList.toggle("hidden", !commands.length);
+  if (!commands.length) return;
+  const heading = element("div", "pending-queue-heading");
+  heading.append(
+    element("strong", "", "Σε αναμονή"),
+    element("span", "count", String(commands.length)),
+  );
+  const list = element("div", "pending-queue-list");
+  for (const command of commands) {
+    const row = element("div", "pending-queue-row");
+    const copy = element("div");
+    copy.append(
+      element(
+        "strong",
+        "",
+        command.payload.title ??
+          pendingActionLabel(command.action, command.payload),
+      ),
+      element(
+        "span",
+        "item-meta",
+        [
+          pendingActionLabel(command.action, command.payload),
+          command.payload.start ?? command.payload.date ?? "",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      ),
+    );
+    row.append(
+      copy,
+      element(
+        "span",
+        "pending-state",
+        command.status === "processing" ? "Εκτελείται" : "Αναμονή",
+      ),
+    );
+    list.append(row);
+  }
+  container.append(heading, list);
+}
+
 function loadChatHistory() {
   try {
     const value = JSON.parse(
-      localStorage.getItem("command-center-chat") ?? "[]",
+      localStorage.getItem(CHAT_STORAGE_KEY) ?? "[]",
     );
     chatMessages = Array.isArray(value) ? value.slice(-40) : [];
   } catch {
     chatMessages = [];
-    localStorage.removeItem("command-center-chat");
+    localStorage.removeItem(CHAT_STORAGE_KEY);
   }
 }
 
 function saveChatHistory() {
   localStorage.setItem(
-    "command-center-chat",
+    CHAT_STORAGE_KEY,
     JSON.stringify(chatMessages.slice(-40)),
   );
 }
@@ -87,7 +160,70 @@ function proposalLabel(action) {
     "add-learning": "Νέο Learning item",
     "add-project-note": "Νέα σημείωση έργου",
     "add-calendar-event": "Νέο συμβάν",
+    "complete-personal-task": "Ολοκλήρωση Personal task",
+    "complete-work-task": "Ολοκλήρωση Work task",
+    "reopen-personal-task": "Επαναφορά Personal task",
+    "reopen-work-task": "Επαναφορά Work task",
+    "delete-personal-task": "Διαγραφή Personal task",
+    "delete-work-task": "Διαγραφή Work task",
+    "update-personal-task": "Επεξεργασία Personal task",
+    "update-work-task": "Επεξεργασία Work task",
+    "complete-reminder": "Ολοκλήρωση υπενθύμισης",
+    "update-reminder": "Επεξεργασία υπενθύμισης",
+    "delete-agenda-item": "Διαγραφή από Πρόγραμμα",
+    "update-calendar-event": "Επεξεργασία συμβάντος",
+    "complete-learning": "Ολοκλήρωση Learning item",
+    "archive-project-note": "Αρχειοθέτηση σημείωσης έργου",
   }[action] ?? action;
+}
+
+function proposalDetails(proposal) {
+  const payload = proposal.payload;
+  const labels = {
+    title: "Τίτλος",
+    date: "Ημερομηνία",
+    calendar: "Calendar",
+    start: "Έναρξη",
+    duration: "Διάρκεια",
+    project: "Έργο",
+    kind: "Τύπος",
+    url: "URL",
+  };
+  if (
+    ["update-personal-task", "update-work-task"].includes(proposal.action)
+  ) {
+    return [
+      ["Από", payload.old_title],
+      ["Σε", payload.title],
+      ["Ημερομηνία", payload.date],
+    ];
+  }
+  if (proposal.action === "update-calendar-event") {
+    return [
+      ["Τίτλος", payload.title],
+      ["Έναρξη", payload.start],
+      ["Διάρκεια", `${payload.duration} λεπτά`],
+      ["Calendar", payload.calendar],
+    ];
+  }
+  if (proposal.action === "delete-agenda-item") {
+    return [
+      ["Τίτλος", payload.title],
+      ["Τύπος", payload.kind === "reminder" ? "Reminder" : "Event"],
+      ["Calendar", payload.calendar],
+    ];
+  }
+  return Object.entries(payload)
+    .filter(
+      ([key, value]) =>
+        value !== null &&
+        value !== "" &&
+        !["id", "uid", "ref", "parent_line", "current_date"].includes(key),
+    )
+    .map(([key, value]) => [
+      labels[key] ?? key,
+      key === "duration" ? `${value} λεπτά` : String(value),
+    ]);
 }
 
 function renderChat() {
@@ -98,7 +234,7 @@ function renderChat() {
       element(
         "div",
         "chat-message assistant",
-        "Γράψε τι θέλεις να καταγράψεις. Θα ζητήσω διευκρίνιση όπου χρειάζεται.",
+        "Είμαι εδώ. Μίλησέ μου φυσικά ή πες μου τι θέλεις να καταγράψεις.",
       ),
     );
   }
@@ -106,31 +242,49 @@ function renderChat() {
     container.append(
       element("div", `chat-message ${message.role}`, message.content),
     );
-    if (message.role === "assistant" && message.proposal) {
+    const proposals = Array.isArray(message.proposals)
+      ? message.proposals
+      : message.proposal
+        ? [message.proposal]
+        : [];
+    for (const [index, proposalData] of proposals.entries()) {
       const proposal = element("section", "chat-proposal");
       proposal.append(
-        element("strong", "", proposalLabel(message.proposal.action)),
+        element("strong", "", proposalLabel(proposalData.action)),
       );
       const details = element("dl");
-      for (const [key, value] of Object.entries(message.proposal.payload)) {
-        if (value === null || value === "") continue;
+      for (const [label, value] of proposalDetails(proposalData)) {
         details.append(
-          element("dt", "", key),
+          element("dt", "", label),
           element("dd", "", String(value)),
         );
       }
       proposal.append(details);
+      const executed = (message.executedProposals ?? []).includes(index);
       const execute = element(
         "button",
         "",
-        message.executed ? "Καταγράφηκε" : "Εκτέλεση",
+        executed
+          ? "Καταγράφηκε"
+          : message.superseded
+            ? "Αντικαταστάθηκε"
+            : "Εκτέλεση",
       );
       execute.type = "button";
-      execute.disabled = Boolean(message.executed);
-      execute.addEventListener("click", () => executeProposal(message, execute));
+      execute.disabled = executed || Boolean(message.superseded);
+      execute.addEventListener("click", () =>
+        executeProposal(message, proposalData, index, execute),
+      );
       proposal.append(execute);
       container.append(proposal);
     }
+  }
+  if (chatPending) {
+    const loader = element("div", "chat-message assistant chat-loading");
+    loader.setAttribute("role", "status");
+    loader.setAttribute("aria-label", "Η Πυξίδα απαντά");
+    loader.append(element("span"), element("span"), element("span"));
+    container.append(loader);
   }
   container.scrollTop = container.scrollHeight;
 }
@@ -143,17 +297,71 @@ function chatContext() {
       parent_line: item.line_number,
       date: item.task_date,
     })),
-    ...(snapshotPayload.work_tasks ?? []).map((item) => ({
-      area: "work",
-      title: item.title,
-      parent_line: item.line_number,
-      date: item.task_date,
-    })),
   ].filter((item) => !String(item.parent_line).startsWith("pending-"));
+  const agenda = [
+    ...(snapshotPayload.agenda ?? []),
+    ...(snapshotPayload.calendar_plan ?? []),
+  ].filter(
+    (item, index, items) =>
+      items.findIndex(
+        (candidate) =>
+          candidate.uid === item.uid &&
+          candidate.calendar === item.calendar,
+      ) === index,
+  );
   return {
     calendars: snapshotPayload.calendars ?? [],
     projects: (snapshotPayload.projects ?? []).map((project) => project.name),
     parents,
+    personal_tasks: (snapshotPayload.personal_tasks ?? [])
+      .slice(0, 100)
+      .map((item) => ({
+        title: item.title,
+        date: item.task_date,
+        completed: Boolean(item.completed),
+        entity_key: taskEntityKey("personal", item),
+      })),
+    work_tasks: (snapshotPayload.work_tasks ?? [])
+      .slice(0, 100)
+      .map((item) => ({
+        title: item.title,
+        date: item.task_date,
+        completed: Boolean(item.completed),
+        entity_key: taskEntityKey("work", item),
+      })),
+    reminders: (snapshotPayload.reminders ?? [])
+      .slice(0, 100)
+      .map((item) => ({
+        id: item.id,
+        title: item.title,
+        due: item.due ?? null,
+        completed: Boolean(item.completed),
+        list: item.list ?? "Reminders",
+      })),
+    agenda: agenda.slice(0, 100).map((item) => ({
+      uid: item.uid,
+      kind: item.kind,
+      title: item.title,
+      calendar: item.calendar,
+      start: item.start,
+      end: item.end,
+      ref: item.command_center_ref ?? null,
+    })),
+    learning: (snapshotPayload.learning ?? []).slice(0, 100).map((item) => ({
+      id: item.id,
+      title: item.title,
+      kind: item.kind,
+      url: item.url ?? null,
+    })),
+    project_notes: (snapshotPayload.projects ?? [])
+      .flatMap((project) =>
+        (project.notes ?? []).map((note) => ({
+          id: note.id,
+          project: project.name,
+          title: note.text,
+        })),
+      )
+      .slice(0, 100),
     selected_date: selectedDate,
   };
 }
@@ -163,10 +371,6 @@ async function sendChatMessage(event) {
   const input = $("#chat-input");
   const content = input.value.trim();
   if (!content) return;
-  const draft =
-    [...chatMessages]
-      .reverse()
-      .find((message) => message.role === "assistant")?.draft ?? null;
   const button = event.submitter ?? $("#chat-form button[type='submit']");
   button.disabled = true;
   input.value = "";
@@ -175,6 +379,7 @@ async function sendChatMessage(event) {
     role: "user",
     content,
   });
+  chatPending = true;
   renderChat();
   try {
     const response = await fetch("/api/chat", {
@@ -189,24 +394,29 @@ async function sendChatMessage(event) {
           content: text,
         })),
         context: chatContext(),
-        draft,
       }),
     });
     const payload = await response.json();
     if (!response.ok) {
       throw new Error(payload.error ?? `HTTP ${response.status}`);
     }
+    for (const message of chatMessages) {
+      if (message.role === "assistant" && (message.proposals ?? []).length) {
+        message.superseded = true;
+      }
+    }
+    chatPending = false;
     chatMessages.push({
       id: crypto.randomUUID(),
       role: "assistant",
       content: payload.reply,
-      proposal: payload.proposal,
-      draft: payload.draft,
-      executed: false,
+      proposals: payload.proposals,
+      executedProposals: [],
     });
     saveChatHistory();
     renderChat();
   } catch (error) {
+    chatPending = false;
     chatMessages.push({
       id: crypto.randomUUID(),
       role: "assistant",
@@ -215,12 +425,13 @@ async function sendChatMessage(event) {
     saveChatHistory();
     renderChat();
   } finally {
+    chatPending = false;
     button.disabled = false;
     input.focus();
   }
 }
 
-async function executeProposal(message, button) {
+async function executeProposal(message, proposal, index, button) {
   const allowed = new Set([
     "add-personal-task",
     "add-work-task",
@@ -228,18 +439,42 @@ async function executeProposal(message, button) {
     "add-learning",
     "add-project-note",
     "add-calendar-event",
+    "complete-personal-task",
+    "complete-work-task",
+    "reopen-personal-task",
+    "reopen-work-task",
+    "delete-personal-task",
+    "delete-work-task",
+    "update-personal-task",
+    "update-work-task",
+    "complete-reminder",
+    "update-reminder",
+    "delete-agenda-item",
+    "update-calendar-event",
+    "complete-learning",
+    "archive-project-note",
   ]);
-  if (!allowed.has(message.proposal.action)) {
+  if (!allowed.has(proposal.action)) {
     throw new Error("Μη επιτρεπτή ενέργεια.");
   }
   button.disabled = true;
   try {
+    const queueAction =
+      proposal.action === "update-calendar-event"
+        ? "add-calendar-event"
+        : proposal.action;
+    const queuePayload =
+      proposal.action === "update-calendar-event"
+        ? { ...proposal.payload, operation: "update" }
+        : proposal.payload;
     await enqueue(
-      message.proposal.action,
-      message.proposal.payload,
-      `chat:${message.id}`,
+      queueAction,
+      queuePayload,
+      proposal.entity_key ?? `chat:${message.id}:${index}`,
     );
-    message.executed = true;
+    message.executedProposals = [
+      ...new Set([...(message.executedProposals ?? []), index]),
+    ];
     saveChatHistory();
     renderChat();
     setStatus("Η ενέργεια περιμένει συγχρονισμό με το Mac.");
@@ -253,7 +488,7 @@ async function executeProposal(message, button) {
 function showLogin() {
   const status = $("#status");
   status.replaceChildren(
-    element("span", "", "Κάνε GitHub login για να δεις το Command Center. "),
+    element("span", "", "Κάνε GitHub login για να δεις την Πυξίδα. "),
   );
   const login = element("button", "", "GitHub login");
   login.type = "button";
@@ -372,6 +607,7 @@ function renderAgenda(events) {
   }
   for (const event of events) {
     const row = element("div", "agenda-row");
+    if (event.pending) row.classList.add("pending");
     const completed =
       event.completed === true ||
       event.title.startsWith("✓ ") ||
@@ -389,7 +625,13 @@ function renderAgenda(events) {
     const copy = element("div", "agenda-copy");
     copy.append(
       element("div", "agenda-title", event.title),
-      element("div", "agenda-calendar", event.calendar),
+      element(
+        "div",
+        "agenda-calendar",
+        event.pending
+          ? `${event.calendar} · Σε αναμονή`
+          : event.calendar,
+      ),
     );
     row.append(copy);
     const link = joinLink(event);
@@ -414,11 +656,16 @@ function reminderDue(value) {
   if (!value) return "Χωρίς ημερομηνία";
   const date = new Date(value);
   if (Number.isNaN(date.valueOf())) return value;
-  return new Intl.DateTimeFormat("el-GR", {
+  const options = {
     weekday: "short",
     day: "numeric",
     month: "short",
-  }).format(date);
+  };
+  if (/T(?!00:00)\d{2}:\d{2}/.test(value)) {
+    options.hour = "2-digit";
+    options.minute = "2-digit";
+  }
+  return new Intl.DateTimeFormat("el-GR", options).format(date);
 }
 
 function renderReminders(items) {
@@ -933,6 +1180,7 @@ function renderCalendars(calendars) {
   for (const calendar of calendars) {
     select.append(new Option(calendar, calendar));
   }
+  if (calendars.includes("Work")) select.value = "Work";
 }
 
 function renderSnapshot(snapshot) {
@@ -1053,9 +1301,16 @@ function renderSnapshot(snapshot) {
   )) {
     if (
       !remindersWithPending.some(
-        (item) =>
-          item.title === command.payload.title &&
-          item.due?.slice(0, 10) === command.payload.date,
+        (item) => {
+          const pendingDate = command.payload.date ?? "";
+          const existingDate = pendingDate.includes("T")
+            ? item.due?.slice(0, 16)
+            : item.due?.slice(0, 10);
+          return (
+            item.title === command.payload.title &&
+            existingDate === pendingDate
+          );
+        },
       )
     ) {
       remindersWithPending.push({
@@ -1112,13 +1367,61 @@ function renderSnapshot(snapshot) {
         (payload) => payload.id === item.id,
       ),
   );
-  const agenda = (snapshotPayload.agenda ?? []).filter(
-    (item) =>
-      !pending(
-        "delete-agenda-item",
-        (payload) =>
-          payload.uid === item.uid && payload.calendar === item.calendar,
-      ),
+  const agenda = (snapshotPayload.agenda ?? [])
+    .map((item) => {
+      const update = pendingCommands.find(
+        (command) =>
+          command.action === "add-calendar-event" &&
+          command.payload.operation === "update" &&
+          command.payload.uid === item.uid &&
+          command.payload.calendar === item.calendar,
+      );
+      return update
+        ? {
+            ...item,
+            title: update.payload.title,
+            start: update.payload.start,
+            end: null,
+            pending: true,
+          }
+        : item;
+    })
+    .filter(
+      (item) =>
+        !pending(
+          "delete-agenda-item",
+          (payload) =>
+            payload.uid === item.uid && payload.calendar === item.calendar,
+        ),
+    );
+  for (const command of pendingCommands.filter(
+    (entry) =>
+      entry.action === "add-calendar-event" &&
+      entry.payload.operation !== "update" &&
+      entry.payload.start?.slice(0, 10) === selectedDate,
+  )) {
+    if (
+      !agenda.some(
+        (item) =>
+          item.title === command.payload.title &&
+          item.calendar === command.payload.calendar &&
+          item.start?.slice(0, 16) === command.payload.start,
+      )
+    ) {
+      agenda.push({
+        uid: null,
+        title: command.payload.title,
+        calendar: command.payload.calendar,
+        start: command.payload.start,
+        end: null,
+        all_day: "false",
+        kind: "event",
+        pending: true,
+      });
+    }
+  }
+  agenda.sort((left, right) =>
+    String(left.start ?? "").localeCompare(String(right.start ?? "")),
   );
   renderAgenda(agenda);
   renderTasks(
@@ -1355,10 +1658,14 @@ function openEdit(kind, item, entityKey = "") {
     item.task_date ?? item.due?.slice(0, 10) ?? "";
   $("#edit-entity-key").value = entityKey;
   $("#edit-title").value = item.title;
-  $("#edit-date").value =
+  const dateInput = $("#edit-date");
+  dateInput.type = kind === "Reminder" ? "datetime-local" : "date";
+  dateInput.value =
     item.task_date ??
-    item.due?.slice(0, 10) ??
-    new Date().toISOString().slice(0, 10);
+    (kind === "Reminder"
+      ? item.due?.slice(0, 16)
+      : item.due?.slice(0, 10)) ??
+    (kind === "Reminder" ? `${localDate()}T09:00` : localDate());
   const dialog = $("#edit-dialog");
   if (!dialog.open) dialog.showModal();
   $("#edit-title").focus();
@@ -1669,6 +1976,7 @@ async function refresh() {
     isHistorical() ? Promise.resolve() : loadScratchpad(),
   ]);
   pendingCommands = commands;
+  renderPendingQueue(pendingCommands);
   renderSnapshot(snapshot);
   if (isHistorical()) {
     renderScratchpad(snapshot?.payload?.scratchpad ?? null);

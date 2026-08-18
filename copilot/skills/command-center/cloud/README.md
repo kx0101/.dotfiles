@@ -44,16 +44,22 @@ in Vercel or this directory.
 
 ## Chat
 
-The owner-only `/api/chat` function uses a deterministic parser with no external
-AI provider, model key, or usage cost. It supports Greek/Greeklish capture,
-natural dates and times, and multi-turn clarification for tasks, Reminders,
-Calendar events, Learning, and project notes. It returns an action-specific
-typed proposal; the browser sends that proposal to the existing Mac command
-queue only after the owner presses Execute.
+The owner-only `/api/chat` function uses `gpt-4.1-nano` through the direct OpenAI
+adapter. Add `OPENAI_API_KEY` as a sensitive Production environment variable in
+Vercel; it never enters browser code or the repository. The function supports
+Greek/Greeklish conversation, natural dates and times, multi-turn clarification,
+and up to four typed create/update/complete/reopen/delete proposals for tasks,
+Reminders, Calendar events, Learning, and project notes. Reminder proposals
+preserve an optional local time as `YYYY-MM-DDTHH:mm`.
 
-Chat history and pending clarification state stay in browser local storage.
-Calendar, project, and todo-parent labels are used only for exact matching
-inside the owner-only Vercel function.
+The browser sends each proposal to the existing Mac command queue only after the
+owner presses Execute. A newer chat turn supersedes older unexecuted proposals.
+Chat history stays in browser local storage. The last 8 messages plus only the
+relevant approved calendar, project, task, Reminder, Agenda, Learning, and
+project-note metadata are sent ephemerally to OpenAI and are not written to the
+snapshot or vault.
+Work data is limited to task title/date/status metadata; Work note content is
+excluded.
 
 ## Mac sync agent
 

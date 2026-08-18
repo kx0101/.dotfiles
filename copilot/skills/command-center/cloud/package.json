@@ -9,7 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.42",
     "@supabase/supabase-js": "^2.57.4",
+    "ai": "^7.0.67",
     "zod": "^4.4.3"
   },
   "devDependencies": {

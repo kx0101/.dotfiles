@@ -418,6 +418,20 @@ def command_arguments(command: dict[str, Any]) -> tuple[str, ...]:
             task_date,
         )
     if action == "add-calendar-event":
+        if payload.get("operation") == "update":
+            return (
+                "calendar-update",
+                "--calendar",
+                str(payload.get("calendar") or ""),
+                "--uid",
+                str(payload.get("uid") or ""),
+                "--title",
+                title,
+                "--start",
+                str(payload.get("start") or ""),
+                "--duration",
+                str(payload.get("duration") or ""),
+            )
         return (
             "calendar-add",
             "--calendar",

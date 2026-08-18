@@ -68,7 +68,9 @@ Todo deletion removes its provider item and marks Markdown `→ διαγράφη
 Deleting a parent cascades through every child. Keep rows locked while an entity
 has a pending/processing cloud command.
 Keep offline Vercel additions visible from the command queue until the Mac sync
-agent writes them. Cloud sync runs are serialized by the agent lock.
+agent writes them. Show every pending/processing command in the top queue, and
+overlay Calendar additions on the matching Agenda date. Cloud sync runs are
+serialized by the agent lock.
 
 The Learning panel has separate Books, Articles, and Videos views. Additions must
 use `learning-add`; removal from the pending view must use `learning-complete`,
@@ -81,8 +83,9 @@ Dashboard health checks must use registered liveness endpoints that do not query
 the database. Readiness endpoints are reserved for deployment/orchestrator gates.
 
 The Reminders panel independently manages the fixed macOS `Reminders` list. It
-may add dated or undated reminders and complete them. Creating a task never
-creates a Reminder; creating a Reminder never creates a task.
+may add undated, date-only, or timed reminders and complete them. Timed
+reminders use local `YYYY-MM-DDTHH:mm`. Creating a task never creates a Reminder;
+creating a Reminder never creates a task.
 
 ## Cloud/mobile
 
@@ -94,9 +97,11 @@ email activity, BookIt billing, calendar names, and project operational metadata
 It never includes Mail bodies, complete Work notes, local paths, or credentials.
 Allowlisted mutations are executed locally through the CLI. Apple Health uses a
 separate owner-only table and restricted ingest token.
-The owner-only chat returns a typed proposal and never mutates data directly.
-Queue the proposal only after the user presses Execute. Chat excludes destructive
-actions and keeps its conversation history in browser local storage.
+The owner-only chat returns typed proposals and never mutates data directly.
+Queue every create/update/complete/reopen/delete proposal only after the user
+presses Execute. Chat keeps its conversation history in browser local storage.
+The model may receive approved Work task title/date/status metadata; it never
+receives Work note content.
 Vercel project-note capture must use `project-record`; project history remains
 append-only. Project modals show project notes only.
 UI deletion archives a project note through `project-record-archive`; it does
@@ -253,9 +258,10 @@ date and type rather than silently filtering categories.
 Agenda entries expose a direct Join action when their URL or description contains
 a Google Meet, Microsoft Teams, or Zoom link.
 
-For events, always ask which calendar to use. Also resolve ambiguity in title,
-local start time, or duration before the write. Echo the exact event and calendar
-after creation.
+For events, use `Work` as the default calendar unless the user explicitly names
+another. Ask only when `Work` is unavailable or the user requests a different
+calendar without naming it. Resolve ambiguity in title, local start time, or
+duration before the write. Echo the exact event and calendar after creation.
 
 ## Email
 
@@ -273,8 +279,10 @@ The wider vault contains sensitive material. Routine operations access
 project source paths are read only when the user explicitly asks for historical
 context; prefer the audited project memory.
 
-Never send Work content to external tools or APIs. Never persist email,
-calendar, GitHub, health, billing, or provider responses in the vault.
+Never send Work content to external tools or APIs except the owner-approved
+task title/date/status metadata used by Πυξίδα chat. Work note content always
+stays local. Never persist email, calendar, GitHub, health, billing, or provider
+responses in the vault.
 Credentials belong in the OS keychain or environment, never notes, the skill
 directory, or public dotfiles.
 

@@ -64,19 +64,22 @@ provider metadata.
 Both apps use the same panel order, DOM interface, workbench styling, responsive
 breakpoints, capture patterns, task tree, project cards, and dialogs. Keep CSS
 shared; do not create a second Vercel theme.
+The user-facing product name is **Πυξίδα**. Internal paths, CLI commands,
+Supabase tables, and deployment identifiers retain the `command-center` name.
 
 The Scratchpad autosaves after 800 ms, is owner-only, and persists until Clear.
 It is not Inbox, project memory, or a Markdown note.
 
 The Vercel chat posts to the owner-only `/api/chat` function. The function
 validates the Supabase bearer token, owner UUID, request origin, message limits,
-and action-specific payload before returning a typed proposal. A pure
-deterministic parser in `cloud/lib/chat-parser.js` handles Greek, Greeklish,
-dates, times, capture types, and multi-turn clarification state without an
-external AI provider. Only the explicit Execute button submits the proposal to
-the existing command queue, and destructive actions are outside the chat
-interface. Chat history and pending clarification state remain in browser local
-storage.
+and action-specific payload before returning up to four typed proposals. It uses
+`gpt-4.1-nano` directly through the OpenAI adapter; `OPENAI_API_KEY` exists only as
+a sensitive Vercel Production environment variable. Only an explicit Execute
+button submits each proposal to the existing command queue. The proposal
+interface covers create/update/complete/reopen/delete for tasks, Reminders, and
+Calendar events, plus Learning completion and project-note archival. A newer
+chat turn supersedes earlier unexecuted proposals. Chat history remains in
+browser local storage.
 
 The first dashboard open per browser/day shows a dismissible briefing modal.
 Closing it stores the date in browser local storage. The date navigator switches
@@ -87,6 +90,11 @@ daily files, so scheduled events appear before that day's snapshot exists.
 Task and Reminder rows support title/date editing. Local writes call CLI update
 commands directly; Vercel writes enter the allowlisted queue and use pending
 overlays so refresh does not revert optimistic UI state.
+Reminder dates may be date-only (`YYYY-MM-DD`) or timed local values
+(`YYYY-MM-DDTHH:mm`). Timed values must survive the queue, macOS Reminders,
+snapshots, display, and editing without being truncated.
+New Calendar events default to the `Work` calendar in chat and the manual event
+form unless the owner explicitly selects another calendar.
 
 Todo capture may target an open parent by stable daily-file line number. No
 selection creates a new root parent. Personal task storage remains flat in
@@ -126,9 +134,14 @@ The snapshot currently contains:
 It excludes Mail bodies, complete Work notes, local/source paths, raw provider
 logs, and credentials.
 
-Chat resolution stays inside the owner-only Vercel function. The approved
-calendar, project, and todo-parent labels are used only for exact deterministic
-matching and are not sent to another provider.
+When the owner invokes chat, the last 8 chat messages and only relevant approved calendar,
+project, task, Reminder, Agenda, Learning, and project-note metadata are sent
+ephemerally to OpenAI for proposal resolution. Work exposure is limited to task
+title/date/status metadata explicitly approved by the owner. They are not added
+to the snapshot or vault. Complete Work notes, Mail bodies, credentials, and
+provider payloads remain excluded.
+The server selects entity catalogs by conversation domain/title before the model
+call, reducing latency, token use, and unrelated metadata exposure.
 
 Allowlisted cloud writes:
 
@@ -137,14 +150,22 @@ Allowlisted cloud writes:
 - add/complete reminders;
 - add/complete Learning;
 - create Calendar events.
+- update Calendar events through the queue adapter and `calendar-update`.
 - update/reschedule Personal/Work tasks and Reminders.
 - append project notes.
 
 Pending/processing commands overlay the Vercel snapshot so a refresh does not
 temporarily revert checked UI state.
+Every active command also appears in the always-visible **Σε αναμονή** queue
+near the top of Πυξίδα. Pending Calendar additions overlay the matching Agenda
+date until the Mac publishes the resulting event or the command leaves the
+active queue.
 Every mutable row sends an `entity_key`. Supabase enforces one pending/processing
 command per entity, and the UI disables that row until the command settles. This
 prevents rapid checkbox clicks from queuing contradictory complete/reopen actions.
+The semantic chat action `update-calendar-event` is adapted to the existing
+allowlisted `add-calendar-event` queue action with `operation=update`; the Mac
+agent routes it to `calendar-update`.
 
 Cloud captures remain durable while the Mac is offline. Vercel overlays pending
 task, reminder, and Learning additions immediately so they remain visible until

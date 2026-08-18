@@ -4,14 +4,16 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark light">
-    <title>Command Center</title>
+    <meta name="theme-color" content="#101310">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <title>Πυξίδα</title>
     <script type="module" src="/src/main.js"></script>
   </head>
   <body>
     <main class="shell">
       <header class="topbar">
         <div>
-          <p class="eyebrow">COMMAND CENTER</p>
+          <p class="eyebrow">ΠΥΞΙΔΑ</p>
           <h1 id="greeting">Καλημέρα</h1>
           <p id="today" class="muted"></p>
         </div>
@@ -29,7 +31,7 @@
         </div>
       </header>
 
-      <section id="status" class="status">Φόρτωση Command Center…</section>
+      <section id="status" class="status">Φόρτωση Πυξίδας…</section>
 
       <nav class="history-toolbar" aria-label="Ημερήσιο αρχείο">
         <button id="history-previous" type="button">←</button>
@@ -87,6 +89,12 @@
           </select>
           <button type="submit">Καταγραφή</button>
       </form>
+
+      <section
+        id="pending-queue"
+        class="pending-queue hidden"
+        aria-live="polite"
+      ></section>
 
       <section id="app" class="view hidden">
           <div class="dashboard-grid">
@@ -337,7 +345,7 @@
       <dialog id="chat-dialog" class="chat-dialog">
         <div class="dialog-header">
           <div>
-            <p class="eyebrow">COMMAND CENTER</p>
+            <p class="eyebrow">ΠΥΞΙΔΑ</p>
             <h2>Συνομιλία</h2>
           </div>
           <div class="chat-header-actions">
@@ -361,7 +369,7 @@
     <section id="access-denied" class="access-denied hidden">
       <span class="access-x">×</span>
       <h1>ΑΠΑΓΟΡΕΥΕΤΑΙ Η ΠΡΟΣΒΑΣΗ</h1>
-      <p>Αυτό το Command Center είναι ιδιωτικό.</p>
+      <p>Η Πυξίδα είναι ιδιωτική.</p>
     </section>
   </body>
 </html>

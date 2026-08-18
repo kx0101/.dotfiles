@@ -436,6 +436,19 @@ def validate_iso_date(value: str) -> str:
     return value
 
 
+def parse_reminder_due(value: str) -> datetime:
+    formats = ("%Y-%m-%d", "%Y-%m-%dT%H:%M")
+    for value_format in formats:
+        try:
+            return datetime.strptime(value, value_format)
+        except ValueError:
+            continue
+    raise CommandCenterError(
+        f"Invalid reminder date '{value}'. "
+        "Use YYYY-MM-DD or YYYY-MM-DDTHH:MM."
+    )
+
+
 def task_relation(action_date: str | None, completed: bool) -> str:
     if completed:
         return "completed"
@@ -2028,7 +2041,9 @@ return output as text
             "title": reminder["title"],
             "start": reminder["due"],
             "end": reminder["due"],
-            "all_day": "true",
+            "all_day": (
+                "true" if reminder["due"].endswith("T00:00") else "false"
+            ),
             "kind": "reminder",
             "url": "",
             "description": "",
@@ -2416,9 +2431,7 @@ def add_reminder_item(
     title = " ".join(title.split())
     if not title or "\n" in title or "\r" in title:
         raise CommandCenterError("Reminder title must fit on one non-empty line.")
-    if action_date:
-        validate_iso_date(action_date)
-    parsed_date = date.fromisoformat(action_date) if action_date else None
+    parsed_date = parse_reminder_due(action_date) if action_date else None
     if list_name not in reminder_list_names():
         raise CommandCenterError(f"Unknown macOS Reminders list: {list_name}")
     script = r'''
@@ -2434,11 +2447,13 @@ on run argv
             set eventYear to item 4 of argv as integer
             set eventMonth to item 5 of argv as integer
             set eventDay to item 6 of argv as integer
+            set eventHour to item 7 of argv as integer
+            set eventMinute to item 8 of argv as integer
             set dueDate to current date
             set year of dueDate to eventYear
             set month of dueDate to eventMonth
             set day of dueDate to eventDay
-            set time of dueDate to 0
+            set time of dueDate to (eventHour * 60 * 60 + eventMinute * 60)
             set createdReminder to make new reminder at end of reminders of targetList with properties {name:todoTitle, due date:dueDate}
         end if
         return id of createdReminder
@@ -2454,12 +2469,14 @@ end run
             str(parsed_date.year) if parsed_date else "0",
             str(parsed_date.month) if parsed_date else "0",
             str(parsed_date.day) if parsed_date else "0",
+            str(parsed_date.hour) if parsed_date else "0",
+            str(parsed_date.minute) if parsed_date else "0",
         ],
     )
 
 
 def add_reminder_todo(list_name: str, title: str, action_date: str) -> str:
-    validate_iso_date(action_date)
+    parse_reminder_due(action_date)
     return add_reminder_item(list_name, title, action_date)
 
 
@@ -2593,7 +2610,7 @@ def update_reminder_todo(
     action_date: str | None = None,
     completed: bool,
 ) -> None:
-    parsed_date = date.fromisoformat(action_date) if action_date else None
+    parsed_date = parse_reminder_due(action_date) if action_date else None
     script = r'''
 on run argv
     set listName to item 1 of argv
@@ -2612,11 +2629,13 @@ on run argv
             set eventYear to item 6 of argv as integer
             set eventMonth to item 7 of argv as integer
             set eventDay to item 8 of argv as integer
+            set eventHour to item 9 of argv as integer
+            set eventMinute to item 10 of argv as integer
             set dueDate to current date
             set year of dueDate to eventYear
             set month of dueDate to eventMonth
             set day of dueDate to eventDay
-            set time of dueDate to 0
+            set time of dueDate to (eventHour * 60 * 60 + eventMinute * 60)
             set due date of targetReminder to dueDate
         end if
     end tell
@@ -2633,6 +2652,8 @@ end run
             str(parsed_date.year if parsed_date else 0),
             str(parsed_date.month if parsed_date else 0),
             str(parsed_date.day if parsed_date else 0),
+            str(parsed_date.hour if parsed_date else 0),
+            str(parsed_date.minute if parsed_date else 0),
         ],
     )
 
@@ -2644,7 +2665,7 @@ def update_reminder(
     new_title: str,
     new_date: str,
 ) -> dict[str, Any]:
-    validate_iso_date(new_date)
+    parse_reminder_due(new_date)
     new_title = " ".join(new_title.split())
     if not new_title:
         raise CommandCenterError("Reminder title cannot be empty.")
@@ -2656,6 +2677,7 @@ def update_reminder(
     if len(matches) > 1:
         raise CommandCenterError("Multiple tasks share the same Reminder ID.")
     if matches:
+        validate_iso_date(new_date)
         task = matches[0]
         return {
             "provider": "task",
@@ -2870,6 +2892,104 @@ end run
         "start": start,
         "duration_minutes": duration,
         "uid": uid,
+    }
+
+
+def update_calendar_event(
+    calendar: str,
+    event_uid: str,
+    title: str,
+    start: str,
+    duration: int,
+) -> dict[str, Any]:
+    normalized_title = " ".join(title.split())
+    if not normalized_title or "\n" in title or "\r" in title:
+        raise CommandCenterError(
+            "Calendar event title must fit on one non-empty line."
+        )
+    try:
+        parsed_start = datetime.fromisoformat(start)
+    except ValueError as exc:
+        raise CommandCenterError(
+            f"Invalid start '{start}'. Use YYYY-MM-DDTHH:MM."
+        ) from exc
+    if parsed_start.tzinfo is not None:
+        raise CommandCenterError(
+            "Calendar start must be local time without a timezone."
+        )
+    if duration <= 0 or duration > 1440:
+        raise CommandCenterError(
+            "Calendar duration must be between 1 and 1440 minutes."
+        )
+    if calendar not in calendar_names():
+        raise CommandCenterError(f"Unknown macOS calendar: {calendar}")
+    script = r'''
+on run argv
+    set calendarName to item 1 of argv
+    set eventUID to item 2 of argv
+    set eventTitle to item 3 of argv
+    set eventYear to item 4 of argv as integer
+    set eventMonth to item 5 of argv as integer
+    set eventDay to item 6 of argv as integer
+    set eventHour to item 7 of argv as integer
+    set eventMinute to item 8 of argv as integer
+    set eventDuration to item 9 of argv as integer
+
+    set eventStart to current date
+    set year of eventStart to eventYear
+    set month of eventStart to eventMonth
+    set day of eventStart to eventDay
+    set time of eventStart to (eventHour * hours) + (eventMinute * minutes)
+    set eventEnd to eventStart + (eventDuration * minutes)
+
+    tell application "Calendar"
+        set targetCalendar to calendar calendarName
+        set matches to every event of targetCalendar whose uid is eventUID
+        if (count of matches) is 0 then error "Calendar event not found"
+        set targetEvent to item 1 of matches
+        set summary of targetEvent to eventTitle
+        if eventStart > (start date of targetEvent) then
+            set end date of targetEvent to eventEnd
+            set start date of targetEvent to eventStart
+        else
+            set start date of targetEvent to eventStart
+            set end date of targetEvent to eventEnd
+        end if
+    end tell
+end run
+'''
+    run_osascript(
+        script,
+        [
+            calendar,
+            event_uid,
+            normalized_title,
+            str(parsed_start.year),
+            str(parsed_start.month),
+            str(parsed_start.day),
+            str(parsed_start.hour),
+            str(parsed_start.minute),
+            str(duration),
+        ],
+    )
+    audit_event(
+        "updated",
+        "calendar-event",
+        normalized_title,
+        {
+            "calendar": calendar,
+            "uid": event_uid,
+            "start": start,
+            "duration_minutes": duration,
+        },
+    )
+    return {
+        "calendar": calendar,
+        "title": normalized_title,
+        "start": start,
+        "duration_minutes": duration,
+        "uid": event_uid,
+        "status": "updated",
     }
 
 
@@ -5605,6 +5725,12 @@ def build_parser() -> argparse.ArgumentParser:
     calendar_add.add_argument("--title", required=True)
     calendar_add.add_argument("--start", required=True)
     calendar_add.add_argument("--duration", type=int, default=60)
+    calendar_update = commands.add_parser("calendar-update")
+    calendar_update.add_argument("--calendar", required=True)
+    calendar_update.add_argument("--uid", required=True)
+    calendar_update.add_argument("--title", required=True)
+    calendar_update.add_argument("--start", required=True)
+    calendar_update.add_argument("--duration", type=int, required=True)
     agenda_delete = commands.add_parser("agenda-delete")
     agenda_delete.add_argument(
         "--kind",
@@ -5868,6 +5994,16 @@ def main() -> None:
             emit(
                 add_calendar_event(
                     args.calendar,
+                    args.title,
+                    args.start,
+                    args.duration,
+                )
+            )
+        elif args.command == "calendar-update":
+            emit(
+                update_calendar_event(
+                    args.calendar,
+                    args.uid,
                     args.title,
                     args.start,
                     args.duration,
