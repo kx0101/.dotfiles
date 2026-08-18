@@ -38,6 +38,12 @@ undated Work inbox tasks. Dated Work tasks live in the matching Work Daily Note.
 - Use a named project when explicit. Otherwise use `Personal` or `Work`; ask one
   short question when the area is genuinely ambiguous.
 - Route dated Work tasks through `work-task-add`, not `task-add`.
+- Every dated todo is mirrored into the macOS schedule: personal/projects become
+  due-dated items in the `Reminders` list (visible in Calendar under
+  `Scheduled Reminders`); Work becomes an all-day event in `Work`.
+- Rescheduling moves the same event. Completion keeps it as `✓` for history.
+- The calendar UID stored in the Markdown task is implementation metadata; never
+  remove or hand-edit it.
 - Use the CLI for add, complete, reschedule, and list operations. Never edit task
   lines with ad-hoc text replacement.
 - On an ambiguous completion or reschedule match, show the CLI's candidates and
@@ -132,10 +138,14 @@ delivery event. Never expose a full recipient address.
 
 ## Calendar
 
-Calendar reads include every calendar visible to macOS. Before creating an
-event, always ask which calendar to use, even if the likely choice is obvious.
-Also resolve any ambiguity in title, local start time, or duration before the
-write. Echo the exact event and calendar after creation.
+Calendar reads include every calendar and every event visible to macOS:
+timed events, all-day entries, holidays, birthdays, notes/reminders, and mirrored
+todos. Group them by date and type rather than silently filtering categories.
+
+For ordinary events, always ask which calendar to use. Also resolve ambiguity in
+title, local start time, or duration before the write. Todo mirroring is the only
+exception: it uses the fixed calendars defined above. Echo the exact event and
+calendar after creation.
 
 ## Email
 

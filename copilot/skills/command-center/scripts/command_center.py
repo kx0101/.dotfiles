@@ -34,6 +34,9 @@ WORK_RELATIVE_PATH = Path("Work")
 TASK_PATTERN = re.compile(r"^- \[(?P<state>[ xX])\] (?P<body>.+)$")
 ACTION_DATE_PATTERN = re.compile(r"\s+📅\s+(?P<date>\d{4}-\d{2}-\d{2})")
 COMPLETED_DATE_PATTERN = re.compile(r"\s+✅\s+(?P<date>\d{4}-\d{2}-\d{2})")
+CALENDAR_METADATA_PATTERN = re.compile(
+    r"\s+<!-- calendar: (?P<metadata>\{.*\}) -->$"
+)
 HEADING_PATTERN = re.compile(r"^##\s+(?P<name>.+?)\s*$")
 RECORD_HEADING_PATTERN = re.compile(
     r"^###\s+(?P<timestamp>.+?)\s+·\s+(?P<label>.+?)\s*$"
@@ -126,6 +129,9 @@ class Task:
     completed: bool
     action_date: str | None
     completed_date: str | None
+    sync_provider: str | None
+    calendar_name: str | None
+    calendar_uid: str | None
     line_number: int
     relation: str
 
@@ -178,6 +184,9 @@ class WorkTask:
     line_number: int
     completed: bool
     managed: bool
+    sync_provider: str | None
+    calendar_name: str | None
+    calendar_uid: str | None
 
 
 def emit(payload: Any) -> None:
@@ -310,10 +319,17 @@ def parse_tasks(tasks_path: Path) -> list[Task]:
         body = match.group("body")
         action_match = ACTION_DATE_PATTERN.search(body)
         completed_match = COMPLETED_DATE_PATTERN.search(body)
+        calendar_match = CALENDAR_METADATA_PATTERN.search(body)
         action_date = action_match.group("date") if action_match else None
         completed_date = completed_match.group("date") if completed_match else None
+        calendar_metadata = (
+            json.loads(calendar_match.group("metadata"))
+            if calendar_match
+            else {}
+        )
         title = ACTION_DATE_PATTERN.sub("", body)
         title = COMPLETED_DATE_PATTERN.sub("", title).strip()
+        title = CALENDAR_METADATA_PATTERN.sub("", title).strip()
         completed = match.group("state").lower() == "x"
         tasks.append(
             Task(
@@ -322,6 +338,11 @@ def parse_tasks(tasks_path: Path) -> list[Task]:
                 completed=completed,
                 action_date=action_date,
                 completed_date=completed_date,
+                sync_provider=calendar_metadata.get("provider", "calendar")
+                if calendar_metadata
+                else None,
+                calendar_name=calendar_metadata.get("name"),
+                calendar_uid=calendar_metadata.get("uid"),
                 line_number=index + 1,
                 relation=task_relation(action_date, completed),
             )
@@ -515,6 +536,47 @@ def append_line_to_section(content: str, section: str, line: str) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def calendar_metadata(
+    calendar_name: str | None,
+    calendar_uid: str | None,
+    sync_provider: str | None = "calendar",
+) -> str:
+    if not calendar_name or not calendar_uid:
+        return ""
+    metadata = json.dumps(
+        {
+            "provider": sync_provider,
+            "name": calendar_name,
+            "uid": calendar_uid,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return f" <!-- calendar: {metadata} -->"
+
+
+def task_line(
+    title: str,
+    *,
+    completed: bool,
+    action_date: str | None,
+    completed_date: str | None = None,
+    calendar_name: str | None = None,
+    calendar_uid: str | None = None,
+    sync_provider: str | None = None,
+) -> str:
+    line = f"- [{'x' if completed else ' '}] {title}"
+    if action_date:
+        line += f" 📅 {action_date}"
+    if completed_date:
+        line += f" ✅ {completed_date}"
+    return line + calendar_metadata(
+        calendar_name,
+        calendar_uid,
+        sync_provider,
+    )
+
+
 def add_task(
     vault: Path,
     title: str,
@@ -547,19 +609,40 @@ def add_task(
     else:
         section = "Inbox"
 
+    sync_provider = None
+    calendar_name = None
+    calendar_uid = None
+    if action_date:
+        sync_provider = "reminders"
+        calendar_name = "Reminders"
+        calendar_uid = add_synced_todo(
+            sync_provider,
+            calendar_name,
+            title,
+            action_date,
+        )
+
     tasks_path = vault / TASKS_RELATIVE_PATH
     with path_lock(tasks_path):
         tasks_path = ensure_tasks_file(vault)
         ensure_task_section(tasks_path, section)
-        line = f"- [ ] {title}"
-        if action_date:
-            line += f" 📅 {action_date}"
+        line = task_line(
+            title,
+            completed=False,
+            action_date=action_date,
+            calendar_name=calendar_name,
+            calendar_uid=calendar_uid,
+            sync_provider=sync_provider,
+        )
         append_task(tasks_path, section, line)
     return {
         "title": title,
         "section": section,
         "action_date": action_date,
         "status": "open",
+        "calendar": calendar_name,
+        "calendar_uid": calendar_uid,
+        "sync_provider": sync_provider,
     }
 
 
@@ -598,10 +681,23 @@ def complete_task(vault: Path, query: str) -> dict[str, Any]:
     with path_lock(tasks_path):
         task = select_task(tasks_path, query)
         completed_date = date.today().isoformat()
-        line = f"- [x] {task.title}"
-        if task.action_date:
-            line += f" 📅 {task.action_date}"
-        line += f" ✅ {completed_date}"
+        if task.calendar_name and task.calendar_uid:
+            update_synced_todo(
+                task.sync_provider or "calendar",
+                task.calendar_name,
+                task.calendar_uid,
+                title=task.title,
+                completed=True,
+            )
+        line = task_line(
+            task.title,
+            completed=True,
+            action_date=task.action_date,
+            completed_date=completed_date,
+            calendar_name=task.calendar_name,
+            calendar_uid=task.calendar_uid,
+            sync_provider=task.sync_provider,
+        )
         replace_task_line(tasks_path, task, line)
     return {
         "title": task.title,
@@ -616,13 +712,42 @@ def reschedule_task(vault: Path, query: str, action_date: str) -> dict[str, Any]
     tasks_path = vault / TASKS_RELATIVE_PATH
     with path_lock(tasks_path):
         task = select_task(tasks_path, query)
-        line = f"- [ ] {task.title} 📅 {action_date}"
+        sync_provider = task.sync_provider or "reminders"
+        calendar_name = task.calendar_name or "Reminders"
+        calendar_uid = task.calendar_uid
+        if calendar_uid:
+            update_synced_todo(
+                sync_provider,
+                calendar_name,
+                calendar_uid,
+                title=task.title,
+                action_date=action_date,
+                completed=False,
+            )
+        else:
+            calendar_uid = add_synced_todo(
+                sync_provider,
+                calendar_name,
+                task.title,
+                action_date,
+            )
+        line = task_line(
+            task.title,
+            completed=False,
+            action_date=action_date,
+            calendar_name=calendar_name,
+            calendar_uid=calendar_uid,
+            sync_provider=sync_provider,
+        )
         replace_task_line(tasks_path, task, line)
     return {
         "title": task.title,
         "section": task.section,
         "status": "open",
         "action_date": action_date,
+        "calendar": calendar_name,
+        "calendar_uid": calendar_uid,
+        "sync_provider": sync_provider,
     }
 
 
@@ -1339,6 +1464,244 @@ end run
     return events
 
 
+def add_synced_todo(
+    provider: str,
+    target: str,
+    title: str,
+    action_date: str,
+) -> str:
+    if provider == "reminders":
+        return add_reminder_todo(target, title, action_date)
+    if provider == "calendar":
+        return add_calendar_todo(target, title, action_date)
+    raise CommandCenterError(f"Unknown todo sync provider: {provider}")
+
+
+def update_synced_todo(
+    provider: str,
+    target: str,
+    identifier: str,
+    *,
+    title: str,
+    action_date: str | None = None,
+    completed: bool,
+) -> None:
+    if provider == "reminders":
+        update_reminder_todo(
+            target,
+            identifier,
+            title=title,
+            action_date=action_date,
+            completed=completed,
+        )
+        return
+    if provider == "calendar":
+        update_calendar_todo(
+            target,
+            identifier,
+            title=title,
+            action_date=action_date,
+            completed=completed,
+        )
+        return
+    raise CommandCenterError(f"Unknown todo sync provider: {provider}")
+
+
+def reminder_list_names() -> list[str]:
+    output = run_osascript(
+        'tell application "Reminders" to get name of every list'
+    )
+    return [name.strip() for name in output.split(",") if name.strip()]
+
+
+def add_reminder_todo(list_name: str, title: str, action_date: str) -> str:
+    validate_iso_date(action_date)
+    if list_name not in reminder_list_names():
+        raise CommandCenterError(f"Unknown macOS Reminders list: {list_name}")
+    parsed_date = date.fromisoformat(action_date)
+    script = r'''
+on run argv
+    set listName to item 1 of argv
+    set todoTitle to item 2 of argv
+    set eventYear to item 3 of argv as integer
+    set eventMonth to item 4 of argv as integer
+    set eventDay to item 5 of argv as integer
+
+    set dueDate to current date
+    set year of dueDate to eventYear
+    set month of dueDate to eventMonth
+    set day of dueDate to eventDay
+    set time of dueDate to 0
+
+    tell application "Reminders"
+        set targetList to list listName
+        set createdReminder to make new reminder at end of reminders of targetList with properties {name:todoTitle, due date:dueDate}
+        return id of createdReminder
+    end tell
+end run
+'''
+    return run_osascript(
+        script,
+        [
+            list_name,
+            title,
+            str(parsed_date.year),
+            str(parsed_date.month),
+            str(parsed_date.day),
+        ],
+    )
+
+
+def update_reminder_todo(
+    list_name: str,
+    reminder_id: str,
+    *,
+    title: str,
+    action_date: str | None = None,
+    completed: bool,
+) -> None:
+    parsed_date = date.fromisoformat(action_date) if action_date else None
+    script = r'''
+on run argv
+    set listName to item 1 of argv
+    set reminderId to item 2 of argv
+    set todoTitle to item 3 of argv
+    set completionState to item 4 of argv
+    set dateValue to item 5 of argv
+    tell application "Reminders"
+        set targetList to list listName
+        set matches to every reminder of targetList whose id is reminderId
+        if (count of matches) is 0 then error "Synced reminder not found"
+        set targetReminder to item 1 of matches
+        set name of targetReminder to todoTitle
+        set completed of targetReminder to (completionState is "true")
+        if dateValue is not "" then
+            set eventYear to item 6 of argv as integer
+            set eventMonth to item 7 of argv as integer
+            set eventDay to item 8 of argv as integer
+            set dueDate to current date
+            set year of dueDate to eventYear
+            set month of dueDate to eventMonth
+            set day of dueDate to eventDay
+            set time of dueDate to 0
+            set due date of targetReminder to dueDate
+        end if
+    end tell
+end run
+'''
+    run_osascript(
+        script,
+        [
+            list_name,
+            reminder_id,
+            title,
+            "true" if completed else "false",
+            action_date or "",
+            str(parsed_date.year if parsed_date else 0),
+            str(parsed_date.month if parsed_date else 0),
+            str(parsed_date.day if parsed_date else 0),
+        ],
+    )
+
+
+def add_calendar_todo(calendar: str, title: str, action_date: str) -> str:
+    validate_iso_date(action_date)
+    if calendar not in calendar_names():
+        raise CommandCenterError(f"Unknown macOS calendar: {calendar}")
+    parsed_date = date.fromisoformat(action_date)
+    calendar_ref = uuid.uuid4().hex
+    script = r'''
+on run argv
+    set calendarName to item 1 of argv
+    set todoTitle to item 2 of argv
+    set calendarRef to item 3 of argv
+    set eventYear to item 4 of argv as integer
+    set eventMonth to item 5 of argv as integer
+    set eventDay to item 6 of argv as integer
+
+    set eventStart to current date
+    set year of eventStart to eventYear
+    set month of eventStart to eventMonth
+    set day of eventStart to eventDay
+    set time of eventStart to 0
+    set eventEnd to eventStart + (1 * days)
+
+    tell application "Calendar"
+        set targetCalendar to calendar calendarName
+        make new event at end of events of targetCalendar with properties {summary:"☐ " & todoTitle, description:"Command Center todo" & linefeed & "Ref: " & calendarRef, start date:eventStart, end date:eventEnd, allday event:true}
+    end tell
+end run
+'''
+    run_osascript(
+        script,
+        [
+            calendar,
+            title,
+            calendar_ref,
+            str(parsed_date.year),
+            str(parsed_date.month),
+            str(parsed_date.day),
+        ],
+    )
+    return calendar_ref
+
+
+def update_calendar_todo(
+    calendar: str,
+    uid: str,
+    *,
+    title: str,
+    action_date: str | None = None,
+    completed: bool,
+) -> None:
+    parsed_date = date.fromisoformat(action_date) if action_date else None
+    script = r'''
+on run argv
+    set calendarName to item 1 of argv
+    set calendarRef to item 2 of argv
+    set todoTitle to item 3 of argv
+    set completionState to item 4 of argv
+    set dateValue to item 5 of argv
+
+    tell application "Calendar"
+        set targetCalendar to calendar calendarName
+        set matchingEvents to every event of targetCalendar whose description contains ("Ref: " & calendarRef)
+        if (count of matchingEvents) is 0 then error "Calendar todo event not found"
+        set targetEvent to item 1 of matchingEvents
+        if completionState is "true" then
+            set summary of targetEvent to "✓ " & todoTitle
+        else
+            set summary of targetEvent to "☐ " & todoTitle
+        end if
+        if dateValue is not "" then
+            set eventYear to item 6 of argv as integer
+            set eventMonth to item 7 of argv as integer
+            set eventDay to item 8 of argv as integer
+            set eventStart to current date
+            set year of eventStart to eventYear
+            set month of eventStart to eventMonth
+            set day of eventStart to eventDay
+            set time of eventStart to 0
+            set start date of targetEvent to eventStart
+            set end date of targetEvent to eventStart + (1 * days)
+            set allday event of targetEvent to true
+        end if
+    end tell
+end run
+'''
+    arguments = [
+        calendar,
+        uid,
+        title,
+        "true" if completed else "false",
+        action_date or "",
+        str(parsed_date.year if parsed_date else 0),
+        str(parsed_date.month if parsed_date else 0),
+        str(parsed_date.day if parsed_date else 0),
+    ]
+    run_osascript(script, arguments)
+
+
 def add_calendar_event(
     calendar: str,
     title: str,
@@ -1785,18 +2148,31 @@ def parse_work_tasks(vault: Path) -> list[WorkTask]:
             match = WORK_TASK_PATTERN.match(line)
             if not match:
                 continue
+            raw_title = match.group("title").strip()
+            calendar_match = CALENDAR_METADATA_PATTERN.search(raw_title)
+            calendar_data = (
+                json.loads(calendar_match.group("metadata"))
+                if calendar_match
+                else {}
+            )
+            title = CALENDAR_METADATA_PATTERN.sub("", raw_title).strip()
             managed = bool(
                 managed_bounds
                 and managed_bounds[0] < index < managed_bounds[1]
             )
             tasks.append(
                 WorkTask(
-                    title=match.group("title").strip(),
+                    title=title,
                     task_date=task_date,
                     path=str(note.relative_to(vault)),
                     line_number=index + 1,
                     completed=match.group("state").lower() == "x",
                     managed=managed,
+                    sync_provider=calendar_data.get("provider", "calendar")
+                    if calendar_data
+                    else None,
+                    calendar_name=calendar_data.get("name"),
+                    calendar_uid=calendar_data.get("uid"),
                 )
             )
     return tasks
@@ -1807,6 +2183,17 @@ def add_work_task(vault: Path, title: str, task_date: str) -> dict[str, Any]:
     normalized_title = " ".join(title.split())
     if not normalized_title or "\n" in title or "\r" in title:
         raise CommandCenterError("Work task title must fit on one non-empty line.")
+    calendar_name = "Work"
+    sync_provider = "calendar"
+    calendar_uid = add_calendar_todo(
+        calendar_name,
+        normalized_title,
+        task_date,
+    )
+    line = (
+        f"- [ ] {normalized_title}"
+        f"{calendar_metadata(calendar_name, calendar_uid, sync_provider)}"
+    )
     note = work_daily_path(vault, date.fromisoformat(task_date))
     with path_lock(note):
         if note.exists():
@@ -1816,12 +2203,15 @@ def add_work_task(vault: Path, title: str, task_date: str) -> dict[str, Any]:
             content = ""
         atomic_write(
             note,
-            append_line_to_section(content, "Command Center", f"- [ ] {normalized_title}"),
+            append_line_to_section(content, "Command Center", line),
         )
     return {
         "title": normalized_title,
         "date": task_date,
         "path": str(note.relative_to(vault)),
+        "calendar": calendar_name,
+        "calendar_uid": calendar_uid,
+        "sync_provider": sync_provider,
     }
 
 
@@ -1849,11 +2239,105 @@ def complete_work_task(vault: Path, query: str) -> dict[str, Any]:
         match = WORK_TASK_PATTERN.match(lines[index])
         if not match or match.group("state").lower() == "x":
             raise CommandCenterError("Work note changed while selecting the task.")
+        if task.calendar_name and task.calendar_uid:
+            update_synced_todo(
+                task.sync_provider or "calendar",
+                task.calendar_name,
+                task.calendar_uid,
+                title=task.title,
+                completed=True,
+            )
         lines[index] = (
-            f"{match.group('prefix')}[x] {match.group('title')}"
+            f"{match.group('prefix')}[x] {task.title}"
+            f"{calendar_metadata(task.calendar_name, task.calendar_uid, task.sync_provider)}"
         )
         atomic_write(note, "\n".join(lines).rstrip() + "\n")
     return asdict(task) | {"completed": True}
+
+
+def reschedule_work_task(
+    vault: Path,
+    query: str,
+    task_date: str,
+) -> dict[str, Any]:
+    validate_iso_date(task_date)
+    normalized = query.casefold().strip()
+    matches = [
+        task
+        for task in parse_work_tasks(vault)
+        if task.managed
+        and not task.completed
+        and normalized in task.title.casefold()
+    ]
+    if not matches:
+        raise CommandCenterError(f"No open Work task matches: {query}")
+    if len(matches) > 1:
+        raise CommandCenterError(
+            f"Multiple open Work tasks match: {query}",
+            [asdict(task) for task in matches],
+        )
+    task = matches[0]
+    calendar_name = task.calendar_name or "Work"
+    sync_provider = task.sync_provider or "calendar"
+    calendar_uid = task.calendar_uid
+    if calendar_uid:
+        update_synced_todo(
+            sync_provider,
+            calendar_name,
+            calendar_uid,
+            title=task.title,
+            action_date=task_date,
+            completed=False,
+        )
+    else:
+        calendar_uid = add_synced_todo(
+            sync_provider,
+            calendar_name,
+            task.title,
+            task_date,
+        )
+
+    source_note = vault / task.path
+    target_note = work_daily_path(vault, date.fromisoformat(task_date))
+    if source_note == target_note:
+        with path_lock(source_note):
+            lines = source_note.read_text(encoding="utf-8").splitlines()
+            lines[task.line_number - 1] = (
+                f"- [ ] {task.title}"
+                f"{calendar_metadata(calendar_name, calendar_uid, sync_provider)}"
+            )
+            atomic_write(source_note, "\n".join(lines).rstrip() + "\n")
+    else:
+        with path_lock(source_note):
+            lines = source_note.read_text(encoding="utf-8").splitlines()
+            lines[task.line_number - 1] = (
+                f"- [x] {task.title} → μεταφέρθηκε {task_date}"
+                f"{calendar_metadata(calendar_name, calendar_uid, sync_provider)}"
+            )
+            atomic_write(source_note, "\n".join(lines).rstrip() + "\n")
+        with path_lock(target_note):
+            target_note.parent.mkdir(parents=True, exist_ok=True)
+            content = (
+                target_note.read_text(encoding="utf-8").rstrip()
+                if target_note.exists()
+                else ""
+            )
+            line = (
+                f"- [ ] {task.title}"
+                f"{calendar_metadata(calendar_name, calendar_uid, sync_provider)}"
+            )
+            atomic_write(
+                target_note,
+                append_line_to_section(content, "Command Center", line),
+            )
+    return {
+        "title": task.title,
+        "from": task.task_date,
+        "to": task_date,
+        "calendar": calendar_name,
+        "calendar_uid": calendar_uid,
+        "sync_provider": sync_provider,
+    }
 
 
 def latest_markdown(directory: Path) -> Path | None:
@@ -2411,6 +2895,9 @@ def build_parser() -> argparse.ArgumentParser:
     work_task_add.add_argument("--date", required=True)
     work_task_complete = commands.add_parser("work-task-complete")
     work_task_complete.add_argument("--query", required=True)
+    work_task_reschedule = commands.add_parser("work-task-reschedule")
+    work_task_reschedule.add_argument("--query", required=True)
+    work_task_reschedule.add_argument("--date", required=True)
     work_append = commands.add_parser("work-append")
     work_append.add_argument(
         "--kind",
@@ -2558,6 +3045,8 @@ def main() -> None:
             emit(add_work_task(vault, args.title, args.date))
         elif args.command == "work-task-complete":
             emit(complete_work_task(vault, args.query))
+        elif args.command == "work-task-reschedule":
+            emit(reschedule_work_task(vault, args.query, args.date))
         elif args.command == "work-append":
             emit(append_work_note(vault, args.kind, args.text, args.date))
         elif args.command == "github":
