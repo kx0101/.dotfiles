@@ -63,6 +63,7 @@ Use either `--project` or `--area`, not both. Valid areas are `Personal` and
 python3 scripts/command_center.py project-list
 python3 scripts/command_center.py project-status --name BookIt
 python3 scripts/command_center.py project-health --name BookIt
+python3 scripts/command_center.py bookit-business
 python3 scripts/command_center.py project-records --name BookIt
 python3 scripts/command_center.py project-records --name BookIt --kind requirement
 

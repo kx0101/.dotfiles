@@ -75,6 +75,10 @@ source:
 For project status, run `project-status` so task and GitHub filtering stay
 deterministic. It includes live health checks. Project source paths are citations
 and historical reference; ongoing knowledge belongs in append-only records.
+For BookIt status, also run `bookit-business` and combine product work with live
+MRR, subscriptions, trials, upcoming renewals, cancellations, and attention
+states. If its credential is missing, report that setup gap without hiding the
+rest of the project status.
 
 ## Inbox and learning
 
