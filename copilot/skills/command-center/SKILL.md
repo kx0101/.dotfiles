@@ -1,13 +1,13 @@
 ---
 name: command-center
-description: Manage the user's Obsidian tasks and projects, or show actionable GitHub PRs, today's macOS Calendar, and recent Apple Mail. Use for todo capture/completion/rescheduling, project management, daily briefings, open PRs/review requests/failing CI, calendar queries/events, email lookup, or project status.
+description: Manage the user's Obsidian tasks, projects, work workflows, learning queue, and inbox, or show GitHub PRs, project health, BookIt business status, macOS Calendar, and Apple Mail. Use for daily/weekly briefings, todo capture/completion, project memory, Work Daily Notes/Brag/1-1/Connects, books/articles/videos, health checks, subscriptions/trials/renewals, PRs/CI, calendar, or email.
 ---
 
 # Command Center
 
 Use the companion CLI as the only interface to command-center data. Read
 [`COMMANDS.md`](COMMANDS.md) when a requested operation needs its exact command.
-Do not scan the rest of the Obsidian vault.
+Read [`WORKFLOWS.md`](WORKFLOWS.md) before a Work mutation.
 
 ## Default briefing
 
@@ -17,16 +17,18 @@ sections, in this order:
 1. **Εκπρόθεσμα**
 2. **Σήμερα**
 3. **Εισερχόμενα**
-4. **GitHub** — authored open PRs, review requests, and failed CI
-5. **Ημερολόγιο**
-6. **Email** — flagged messages and unread messages from the last 48 hours
+4. **Work** — today's Daily Note and recent unchecked items
+5. **GitHub** — authored open PRs, review requests, and failed CI
+6. **Health** — failures first; summarize healthy checks in one line
+7. **Ημερολόγιο**
+8. **Email** — flagged messages and unread messages from the last 48 hours
 
 Keep the response compact: one bullet per item and no narrative recap.
 
 ## Tasks
 
-`Command Center/Tasks.md` is the sole source of truth for new tasks. Existing
-daily notes remain notes; never mine them automatically for implied tasks.
+`Command Center/Tasks.md` is the source of truth for personal/project tasks and
+undated Work inbox tasks. Dated Work tasks live in the matching Work Daily Note.
 
 - Convert rough Greeklish or English input into short, natural Greek.
 - Preserve product names, code symbols, and technical terms in English.
@@ -35,6 +37,7 @@ daily notes remain notes; never mine them automatically for implied tasks.
 - An undated task is inbox work.
 - Use a named project when explicit. Otherwise use `Personal` or `Work`; ask one
   short question when the area is genuinely ambiguous.
+- Route dated Work tasks through `work-task-add`, not `task-add`.
 - Use the CLI for add, complete, reschedule, and list operations. Never edit task
   lines with ad-hoc text replacement.
 - On an ambiguous completion or reschedule match, show the CLI's candidates and
@@ -70,8 +73,33 @@ source:
   credentials.
 
 For project status, run `project-status` so task and GitHub filtering stay
-deterministic. Render and Resend are on-demand integrations reserved for a later
-version; do not pretend they are connected.
+deterministic. It includes live health checks. Project source paths are citations
+and historical reference; ongoing knowledge belongs in append-only records.
+
+## Inbox and learning
+
+Use `capture` for a thought or reference that is neither a task nor settled
+project knowledge. Use `learning-add` for books, articles, videos, courses, and
+reusable resources. Link a learning item to a project when relevant.
+
+- Keep one item per entry with title, optional URL, source, and optional project.
+- Complete items with `learning-complete`; never delete them.
+- Source notes used during migration remain untouched historical sources.
+- A weekly review reports pending learning, inbox size, tasks, Work status,
+  project records, and health.
+
+## Work
+
+Work Daily Notes, Brag doc, 1-1, Connects, Quarterly Tasks, Queries, Generic
+Notes, Updates, and Drawings remain in their established folders. The skill
+indexes or appends in place; it never moves, renames, reformats, or deletes them.
+
+- Daily Work tasks may be added or completed directly.
+- Brag, Connects, and 1-1 writes require explicit confirmation of the exact text
+  and target file before running `work-append`.
+- 1-1 contents are HR-sensitive. Show only file/date metadata unless the user
+  explicitly asks to inspect that note.
+- Drawings are title/index-only and never edited by this skill.
 
 ## GitHub
 
@@ -83,6 +111,19 @@ GitHub is read-only in this workflow. Report:
 
 Do not comment, approve, close, merge, or rerun checks unless the user separately
 and explicitly requests that action.
+
+## Live operations
+
+Use `project-health` for public frontend/API checks. Never infer or invent an
+endpoint; health URLs must be registered in the project note.
+
+Use `bookit-business` for live BookIt overview, active subscriptions, trials,
+cancellations, attention states, and next billing/end dates. This is read-only
+and must use a token from environment or macOS Keychain. Never persist its
+response in Obsidian.
+
+Render logs are read-only, bounded, and redacted. Resend activity reports only
+timestamps and delivery events; recipients and subjects are omitted.
 
 ## Calendar
 
@@ -101,11 +142,15 @@ skill.
 
 ## Privacy
 
-The wider vault contains sensitive material. Access only `Command Center/`.
-Never search other vault notes for credentials, project configuration, or task
-context. Never persist email, calendar, GitHub, or future provider responses in
-the vault. Credentials belong in the OS keychain or environment, never project
-notes, the skill directory, or public dotfiles.
+The wider vault contains sensitive material. Routine operations access
+`Command Center/` plus the explicitly supported `Work/` paths. Registered
+project source paths are read only when the user explicitly asks for historical
+context; prefer the audited project memory.
+
+Never send Work content to external tools or APIs. Never persist email,
+calendar, GitHub, health, billing, or provider responses in the vault.
+Credentials belong in the OS keychain or environment, never notes, the skill
+directory, or public dotfiles.
 
 ## Language and presentation
 

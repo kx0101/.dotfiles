@@ -5,13 +5,20 @@ from __future__ import annotations
 import argparse
 import fcntl
 import hashlib
+import ipaddress
 import json
 import os
 import re
+import socket
 import subprocess
 import sys
 import tempfile
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta
@@ -21,6 +28,9 @@ from typing import Any
 
 TASKS_RELATIVE_PATH = Path("Command Center/Tasks.md")
 PROJECTS_RELATIVE_PATH = Path("Command Center/Projects")
+INBOX_RELATIVE_PATH = Path("Command Center/Inbox.md")
+LEARNING_RELATIVE_PATH = Path("Command Center/Learning.md")
+WORK_RELATIVE_PATH = Path("Work")
 TASK_PATTERN = re.compile(r"^- \[(?P<state>[ xX])\] (?P<body>.+)$")
 ACTION_DATE_PATTERN = re.compile(r"\s+📅\s+(?P<date>\d{4}-\d{2}-\d{2})")
 COMPLETED_DATE_PATTERN = re.compile(r"\s+✅\s+(?P<date>\d{4}-\d{2}-\d{2})")
@@ -48,6 +58,11 @@ SENSITIVE_SHAPE_PATTERN = re.compile(
     r"|AIza[A-Za-z0-9_-]{20,}"
     r")"
 )
+ANSI_PATTERN = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+EMAIL_PATTERN = re.compile(
+    r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
+    re.IGNORECASE,
+)
 RECORD_KIND_LABELS = {
     "requirement": "Απαίτηση",
     "fact": "Πληροφορία",
@@ -57,6 +72,34 @@ RECORD_KIND_LABELS = {
     "summary": "Ενημέρωση σύνοψης",
 }
 RECORD_LABEL_KINDS = {label: kind for kind, label in RECORD_KIND_LABELS.items()}
+LEARNING_KINDS = {
+    "book": "Βιβλία",
+    "article": "Άρθρα",
+    "video": "Βίντεο",
+    "course": "Μαθήματα",
+    "resource": "Πόροι",
+}
+LEARNING_ITEM_PATTERN = re.compile(
+    r"^- \[(?P<state>[ xX])\] (?P<title>.*?) "
+    r"<!-- cc: (?P<metadata>\{.*\}) -->$"
+)
+WORK_TASK_PATTERN = re.compile(
+    r"^(?P<prefix>\s*(?:\d+\.|-)\s+)\[(?P<state>[ xX])\]\s+(?P<title>.+)$"
+)
+MONTH_NAMES = (
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+)
 
 
 class CommandCenterError(Exception):
@@ -92,9 +135,14 @@ class Project:
     name: str
     area: str
     status: str
+    lifecycle: str
     local_path: str | None
     github: str | None
     render_services: list[str]
+    render_service_ids: list[str]
+    resend_domains: list[str]
+    source_paths: list[str]
+    health_checks: list[str]
     note_path: str
 
 
@@ -107,6 +155,29 @@ class ProjectRecord:
     source: str
     supersedes: str | None
     active: bool
+
+
+@dataclass
+class LearningItem:
+    id: str
+    title: str
+    kind: str
+    url: str | None
+    project: str | None
+    source: str
+    added: str
+    completed: bool
+    line_number: int
+
+
+@dataclass
+class WorkTask:
+    title: str
+    task_date: str
+    path: str
+    line_number: int
+    completed: bool
+    managed: bool
 
 
 def emit(payload: Any) -> None:
@@ -305,9 +376,14 @@ def load_projects(vault: Path) -> list[Project]:
                 name=str(data.get("name") or note.stem),
                 area=str(data.get("area") or "personal").lower(),
                 status=str(data.get("status") or "active").lower(),
+                lifecycle=str(data.get("lifecycle") or "active").lower(),
                 local_path=data.get("local_path") or None,
                 github=data.get("github") or None,
                 render_services=list(data.get("render_services") or []),
+                render_service_ids=list(data.get("render_service_ids") or []),
+                resend_domains=list(data.get("resend_domains") or []),
+                source_paths=list(data.get("source_paths") or []),
+                health_checks=list(data.get("health_checks") or []),
                 note_path=str(note.relative_to(vault)),
             )
         )
@@ -426,6 +502,19 @@ def append_task(tasks_path: Path, section: str, task_line: str) -> None:
     atomic_write(tasks_path, "\n".join(lines).rstrip() + "\n")
 
 
+def append_line_to_section(content: str, section: str, line: str) -> str:
+    lines = content.splitlines()
+    bounds = markdown_section_bounds(lines, section)
+    if bounds is None:
+        return content.rstrip() + f"\n\n## {section}\n\n{line}\n"
+    start, end = bounds
+    insert_at = end
+    while insert_at > start + 1 and not lines[insert_at - 1].strip():
+        insert_at -= 1
+    lines.insert(insert_at, line)
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def add_task(
     vault: Path,
     title: str,
@@ -446,6 +535,10 @@ def add_task(
         raise CommandCenterError("Use either --area or --project, not both.")
     if action_date:
         validate_iso_date(action_date)
+    if area == "Work" and action_date:
+        raise CommandCenterError(
+            "Dated Work tasks must be added with work-task-add."
+        )
 
     if project:
         section = project_by_name(vault, project).name
@@ -567,6 +660,39 @@ def run_json(command: list[str], *, allow_failure: bool = False) -> Any:
         ) from exc
 
 
+def parse_json_stream(output: str) -> list[Any]:
+    decoder = json.JSONDecoder()
+    position = 0
+    values: list[Any] = []
+    while position < len(output):
+        while position < len(output) and output[position].isspace():
+            position += 1
+        if position >= len(output):
+            break
+        try:
+            value, position = decoder.raw_decode(output, position)
+        except json.JSONDecodeError as exc:
+            raise IntegrationError("Integration returned invalid JSON stream.") from exc
+        values.append(value)
+    return values
+
+
+def redact_external_text(value: str) -> str:
+    redacted = ANSI_PATTERN.sub("", value)
+    redacted = EMAIL_PATTERN.sub("<EMAIL>", redacted)
+    redacted = re.sub(
+        r"(?i)(authorization[:=]\s*(?:bearer\s+)?)(\S+)",
+        r"\1<REDACTED>",
+        redacted,
+    )
+    redacted = re.sub(
+        r"(?i)((?:api[_-]?key|token|secret|password)[:=]\s*)(\S+)",
+        r"\1<REDACTED>",
+        redacted,
+    )
+    return redacted
+
+
 def github_attention(repository: str | None = None) -> dict[str, Any]:
     authored = run_json(
         [
@@ -672,6 +798,7 @@ def project_status(vault: Path, name: str) -> dict[str, Any]:
         ],
         "tasks": list_tasks(vault, "all", project.name),
         "github": github_attention(project.github) if project.github else None,
+        "health": project_health(vault, project.name),
     }
 
 
@@ -733,6 +860,7 @@ def project_note_content(project: Project) -> str:
         f"name: {scalar(project.name)}",
         f"status: {project.status}",
         f"area: {project.area}",
+        f"lifecycle: {project.lifecycle}",
     ]
     if project.local_path:
         lines.append(f"local_path: {scalar(project.local_path)}")
@@ -740,6 +868,14 @@ def project_note_content(project: Project) -> str:
         lines.append(f"github: {scalar(project.github)}")
     lines.append("render_services:")
     lines.extend(f"  - {scalar(name)}" for name in project.render_services)
+    lines.append("render_service_ids:")
+    lines.extend(f"  - {scalar(identifier)}" for identifier in project.render_service_ids)
+    lines.append("resend_domains:")
+    lines.extend(f"  - {scalar(domain)}" for domain in project.resend_domains)
+    lines.append("source_paths:")
+    lines.extend(f"  - {scalar(path)}" for path in project.source_paths)
+    lines.append("health_checks:")
+    lines.extend(f"  - {scalar(check)}" for check in project.health_checks)
     lines.extend(
         [
             "---",
@@ -755,6 +891,31 @@ def project_note_content(project: Project) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def validate_project_metadata(
+    render_service_ids: list[str],
+    resend_domains: list[str],
+    source_paths: list[str],
+    health_checks: list[str],
+) -> None:
+    for identifier in render_service_ids:
+        if not re.fullmatch(r"srv-[a-z0-9]+", identifier):
+            raise CommandCenterError(f"Invalid Render service ID: {identifier}")
+    domain_pattern = re.compile(
+        r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}"
+    )
+    for domain in resend_domains:
+        if not domain_pattern.fullmatch(domain):
+            raise CommandCenterError(f"Invalid Resend domain: {domain}")
+    for source_path in source_paths:
+        parsed = Path(source_path)
+        if parsed.is_absolute() or ".." in parsed.parts or "\\" in source_path:
+            raise CommandCenterError(
+                f"Project source path must be vault-relative: {source_path}"
+            )
+    for health_check in health_checks:
+        parse_health_check(health_check)
 
 
 def project_note(vault: Path, name: str) -> Path:
@@ -971,8 +1132,13 @@ def add_project(
     vault: Path,
     name: str | None,
     area: str,
+    lifecycle: str,
     local_path: str | None,
     github: str | None,
+    render_service_ids: list[str],
+    resend_domains: list[str],
+    source_paths: list[str],
+    health_checks: list[str],
 ) -> Project:
     resolved_path: Path | None = None
     if local_path:
@@ -993,6 +1159,12 @@ def add_project(
         raise CommandCenterError(
             f"Project name is reserved and cannot be used: {name}"
         )
+    validate_project_metadata(
+        render_service_ids,
+        resend_domains,
+        source_paths,
+        health_checks,
+    )
 
     projects_dir = vault / PROJECTS_RELATIVE_PATH
     projects_dir.mkdir(parents=True, exist_ok=True)
@@ -1011,9 +1183,14 @@ def add_project(
             name=name,
             area=area,
             status="active",
+            lifecycle=lifecycle,
             local_path=portable_path(resolved_path) if resolved_path else None,
             github=discovered_github,
             render_services=services,
+            render_service_ids=render_service_ids,
+            resend_domains=resend_domains,
+            source_paths=source_paths,
+            health_checks=health_checks,
             note_path=str(note.relative_to(vault)),
         )
         atomic_write(note, project_note_content(project))
@@ -1221,15 +1398,860 @@ end run
     return messages[: 30 if query else 10]
 
 
+def parse_health_check(entry: str) -> tuple[str, str]:
+    if "|" not in entry:
+        raise CommandCenterError(
+            f"Invalid health check '{entry}'. Use 'Label|https://url'."
+        )
+    label, url = (part.strip() for part in entry.split("|", 1))
+    parsed = urllib.parse.urlparse(url)
+    if (
+        not label
+        or parsed.scheme not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+    ):
+        raise CommandCenterError(
+            f"Invalid health check '{entry}'. Use 'Label|https://url'."
+        )
+    validate_public_hostname(parsed.hostname)
+    return label, url
+
+
+def validate_public_hostname(hostname: str) -> None:
+    if hostname.casefold() == "localhost" or hostname.casefold().endswith(".localhost"):
+        raise CommandCenterError("Health checks must use a public host.")
+    try:
+        addresses = {
+            ipaddress.ip_address(item[4][0])
+            for item in socket.getaddrinfo(hostname, None)
+        }
+    except socket.gaierror as exc:
+        raise IntegrationError(f"Health host cannot be resolved: {hostname}") from exc
+    if not addresses or any(not address.is_global for address in addresses):
+        raise CommandCenterError("Health checks must use public IP addresses.")
+
+
+def check_health(entry: str) -> dict[str, Any]:
+    label, url = parse_health_check(entry)
+    started = time.monotonic()
+    request = urllib.request.Request(
+        url,
+        headers={"User-Agent": "CommandCenter/1.0"},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            status_code = response.status
+            response.read(256)
+        error = None
+    except urllib.error.HTTPError as exc:
+        status_code = exc.code
+        error = f"http_{exc.code}"
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        status_code = None
+        error = type(exc).__name__.lower()
+    elapsed_ms = round((time.monotonic() - started) * 1000)
+    return {
+        "label": label,
+        "url": url,
+        "up": status_code is not None and 200 <= status_code < 400,
+        "status_code": status_code,
+        "latency_ms": elapsed_ms,
+        "error": error,
+    }
+
+
+def safe_health_job(job: tuple[str, str]) -> dict[str, Any]:
+    project_name, entry = job
+    try:
+        return {"project": project_name, **check_health(entry)}
+    except CommandCenterError as exc:
+        return {
+            "project": project_name,
+            "label": entry.split("|", 1)[0].strip() or "invalid",
+            "url": entry.split("|", 1)[1].strip() if "|" in entry else None,
+            "up": False,
+            "status_code": None,
+            "latency_ms": None,
+            "error": str(exc),
+        }
+
+
+def project_health(vault: Path, name: str | None = None) -> list[dict[str, Any]]:
+    projects = (
+        [project_by_name(vault, name)]
+        if name
+        else [
+            project
+            for project in load_projects(vault)
+            if project.status == "active" and project.health_checks
+        ]
+    )
+    jobs = [
+        (project.name, entry)
+        for project in projects
+        for entry in project.health_checks
+    ]
+    if not jobs:
+        return []
+
+    with ThreadPoolExecutor(max_workers=min(8, len(jobs))) as pool:
+        return list(pool.map(safe_health_job, jobs))
+
+
+def ensure_inbox_file(vault: Path) -> Path:
+    path = vault / INBOX_RELATIVE_PATH
+    if not path.exists():
+        atomic_write(path, "# Inbox\n\n")
+    return path
+
+
+def capture_note(
+    vault: Path,
+    text: str,
+    source: str,
+    project: str | None,
+) -> dict[str, Any]:
+    normalized_text, normalized_source = validate_project_memory(text, source)
+    project_name = project_by_name(vault, project).name if project else None
+    now = datetime.now().astimezone()
+    record_id = f"{now.strftime('%Y%m%dT%H%M%S%z')}-{uuid.uuid4().hex[:6]}"
+    lines = [
+        f"### {now.strftime('%Y-%m-%d %H:%M:%S')}",
+        f"<!-- id: {record_id} -->",
+        normalized_text,
+        "",
+        f"- Πηγή: {normalized_source}",
+    ]
+    if project_name:
+        lines.append(f"- Project: [[Projects/{project_name}|{project_name}]]")
+    lines.append("")
+    inbox = vault / INBOX_RELATIVE_PATH
+    with path_lock(inbox):
+        inbox = ensure_inbox_file(vault)
+        atomic_write(
+            inbox,
+            inbox.read_text(encoding="utf-8").rstrip()
+            + "\n\n"
+            + "\n".join(lines),
+        )
+    return {
+        "id": record_id,
+        "text": normalized_text,
+        "source": normalized_source,
+        "project": project_name,
+        "created_at": now.isoformat(timespec="seconds"),
+    }
+
+
+def inbox_items(vault: Path) -> list[dict[str, Any]]:
+    path = vault / INBOX_RELATIVE_PATH
+    if not path.is_file():
+        return []
+    lines = path.read_text(encoding="utf-8").splitlines()
+    items: list[dict[str, Any]] = []
+    index = 0
+    while index < len(lines):
+        if not lines[index].startswith("### "):
+            index += 1
+            continue
+        created_at = lines[index].removeprefix("### ").strip()
+        block_end = index + 1
+        while block_end < len(lines) and not lines[block_end].startswith("### "):
+            block_end += 1
+        block = lines[index + 1 : block_end]
+        record_id = ""
+        source = ""
+        project = None
+        body: list[str] = []
+        for line in block:
+            id_match = RECORD_ID_PATTERN.match(line)
+            if id_match:
+                record_id = id_match.group("id")
+            elif line.startswith("- Πηγή: "):
+                source = line.removeprefix("- Πηγή: ").strip()
+            elif line.startswith("- Project: "):
+                project = line.removeprefix("- Project: ").strip()
+            elif line.strip():
+                body.append(line.strip())
+        items.append(
+            {
+                "id": record_id,
+                "created_at": created_at,
+                "text": " ".join(body),
+                "source": source,
+                "project": project,
+            }
+        )
+        index = block_end
+    return items
+
+
+def ensure_learning_file(vault: Path) -> Path:
+    path = vault / LEARNING_RELATIVE_PATH
+    if not path.exists():
+        sections = "\n\n".join(f"## {label}" for label in LEARNING_KINDS.values())
+        atomic_write(path, f"# Learning\n\n{sections}\n")
+    return path
+
+
+def parse_learning(vault: Path) -> list[LearningItem]:
+    path = vault / LEARNING_RELATIVE_PATH
+    if not path.is_file():
+        return []
+    items: list[LearningItem] = []
+    for index, line in enumerate(path.read_text(encoding="utf-8").splitlines()):
+        match = LEARNING_ITEM_PATTERN.match(line)
+        if not match:
+            continue
+        try:
+            metadata = json.loads(match.group("metadata"))
+        except json.JSONDecodeError as exc:
+            raise CommandCenterError(
+                f"Malformed Learning metadata on line {index + 1}."
+            ) from exc
+        display_title = match.group("title").strip()
+        markdown_link = re.match(r"^\[(?P<title>.+)\]\(.+\)$", display_title)
+        items.append(
+            LearningItem(
+                id=str(metadata["id"]),
+                title=markdown_link.group("title")
+                if markdown_link
+                else display_title,
+                kind=str(metadata["kind"]),
+                url=metadata.get("url"),
+                project=metadata.get("project"),
+                source=str(metadata.get("source") or ""),
+                added=str(metadata["added"]),
+                completed=match.group("state").lower() == "x",
+                line_number=index + 1,
+            )
+        )
+    return items
+
+
+def add_learning(
+    vault: Path,
+    title: str,
+    kind: str,
+    url: str | None,
+    project: str | None,
+    source: str,
+) -> dict[str, Any]:
+    normalized_title, normalized_source = validate_project_memory(title, source)
+    project_name = project_by_name(vault, project).name if project else None
+    if url and not re.match(r"^https?://", url):
+        raise CommandCenterError("Learning URL must start with http:// or https://.")
+    if url and (
+        SENSITIVE_VALUE_PATTERN.search(url)
+        or SENSITIVE_SHAPE_PATTERN.search(url)
+    ):
+        raise CommandCenterError("Learning URL cannot contain credential-like values.")
+    metadata = {
+        "id": uuid.uuid4().hex[:12],
+        "kind": kind,
+        "url": url,
+        "project": project_name,
+        "source": normalized_source,
+        "added": date.today().isoformat(),
+    }
+    display_title = (
+        f"[{normalized_title}]({url})" if url else normalized_title
+    )
+    line = (
+        f"- [ ] {display_title} "
+        f"<!-- cc: {json.dumps(metadata, ensure_ascii=False, separators=(',', ':'))} -->"
+    )
+    learning = vault / LEARNING_RELATIVE_PATH
+    with path_lock(learning):
+        learning = ensure_learning_file(vault)
+        ensure_task_section(learning, LEARNING_KINDS[kind])
+        append_task(learning, LEARNING_KINDS[kind], line)
+    return metadata | {"title": normalized_title}
+
+
+def list_learning(
+    vault: Path,
+    kind: str | None,
+    project: str | None,
+    include_done: bool,
+) -> list[dict[str, Any]]:
+    items = parse_learning(vault)
+    filtered = [
+        item
+        for item in items
+        if (include_done or not item.completed)
+        and (kind is None or item.kind == kind)
+        and (
+            project is None
+            or (item.project or "").casefold() == project.casefold()
+        )
+    ]
+    return [asdict(item) for item in filtered]
+
+
+def complete_learning(vault: Path, query: str) -> dict[str, Any]:
+    path = vault / LEARNING_RELATIVE_PATH
+    normalized = query.casefold().strip()
+    with path_lock(path):
+        matches = [
+            item
+            for item in parse_learning(vault)
+            if not item.completed
+            and (
+                item.id == query
+                or normalized in item.title.casefold()
+            )
+        ]
+        if not matches:
+            raise CommandCenterError(f"No learning item matches: {query}")
+        if len(matches) > 1:
+            raise CommandCenterError(
+                f"Multiple learning items match: {query}",
+                [asdict(item) for item in matches],
+            )
+        item = matches[0]
+        lines = path.read_text(encoding="utf-8").splitlines()
+        line_index = item.line_number - 1
+        lines[line_index] = lines[line_index].replace("- [ ]", "- [x]", 1)
+        atomic_write(path, "\n".join(lines).rstrip() + "\n")
+    return {"id": item.id, "title": item.title, "status": "completed"}
+
+
+def work_daily_root(vault: Path) -> Path:
+    return vault / WORK_RELATIVE_PATH / "Daily Notes"
+
+
+def work_daily_path(vault: Path, task_date: date) -> Path:
+    month_folder = f"{task_date.month}. {MONTH_NAMES[task_date.month - 1]} {task_date.year}"
+    return work_daily_root(vault) / month_folder / f"{task_date.isoformat()}.md"
+
+
+def parse_work_tasks(vault: Path) -> list[WorkTask]:
+    root = work_daily_root(vault)
+    if not root.is_dir():
+        return []
+    tasks: list[WorkTask] = []
+    for note in sorted(root.glob("*/*.md")):
+        try:
+            task_date = date.fromisoformat(note.stem).isoformat()
+        except ValueError:
+            continue
+        lines = note.read_text(encoding="utf-8").splitlines()
+        managed_bounds = markdown_section_bounds(lines, "Command Center")
+        for index, line in enumerate(lines):
+            match = WORK_TASK_PATTERN.match(line)
+            if not match:
+                continue
+            managed = bool(
+                managed_bounds
+                and managed_bounds[0] < index < managed_bounds[1]
+            )
+            tasks.append(
+                WorkTask(
+                    title=match.group("title").strip(),
+                    task_date=task_date,
+                    path=str(note.relative_to(vault)),
+                    line_number=index + 1,
+                    completed=match.group("state").lower() == "x",
+                    managed=managed,
+                )
+            )
+    return tasks
+
+
+def add_work_task(vault: Path, title: str, task_date: str) -> dict[str, Any]:
+    validate_iso_date(task_date)
+    normalized_title = " ".join(title.split())
+    if not normalized_title or "\n" in title or "\r" in title:
+        raise CommandCenterError("Work task title must fit on one non-empty line.")
+    note = work_daily_path(vault, date.fromisoformat(task_date))
+    with path_lock(note):
+        if note.exists():
+            content = note.read_text(encoding="utf-8").rstrip()
+        else:
+            note.parent.mkdir(parents=True, exist_ok=True)
+            content = ""
+        atomic_write(
+            note,
+            append_line_to_section(content, "Command Center", f"- [ ] {normalized_title}"),
+        )
+    return {
+        "title": normalized_title,
+        "date": task_date,
+        "path": str(note.relative_to(vault)),
+    }
+
+
+def complete_work_task(vault: Path, query: str) -> dict[str, Any]:
+    normalized = query.casefold().strip()
+    matches = [
+        task
+        for task in parse_work_tasks(vault)
+        if task.managed
+        and not task.completed
+        and normalized in task.title.casefold()
+    ]
+    if not matches:
+        raise CommandCenterError(f"No open work task matches: {query}")
+    if len(matches) > 1:
+        raise CommandCenterError(
+            f"Multiple open work tasks match: {query}",
+            [asdict(task) for task in matches],
+        )
+    task = matches[0]
+    note = vault / task.path
+    with path_lock(note):
+        lines = note.read_text(encoding="utf-8").splitlines()
+        index = task.line_number - 1
+        match = WORK_TASK_PATTERN.match(lines[index])
+        if not match or match.group("state").lower() == "x":
+            raise CommandCenterError("Work note changed while selecting the task.")
+        lines[index] = (
+            f"{match.group('prefix')}[x] {match.group('title')}"
+        )
+        atomic_write(note, "\n".join(lines).rstrip() + "\n")
+    return asdict(task) | {"completed": True}
+
+
+def latest_markdown(directory: Path) -> Path | None:
+    files = list(directory.glob("*.md")) if directory.is_dir() else []
+    return max(files, key=lambda path: path.stat().st_mtime) if files else None
+
+
+def work_sources(vault: Path) -> dict[str, Any]:
+    work = vault / WORK_RELATIVE_PATH
+    mappings = {
+        "brag": work / "Brag doc",
+        "one_on_one": work / "1-1",
+        "connects": work / "Connects",
+        "drawings": work / "Drawings",
+    }
+    return {
+        key: [
+            str(path.relative_to(vault))
+            for path in sorted(directory.glob("*.md"))
+        ]
+        for key, directory in mappings.items()
+    } | {
+        "quarterly": "Work/Quarterly Tasks.md",
+        "queries": "Work/Queries.md",
+        "generic": "Work/Generic Notes.md",
+        "updates": [
+            str(path.relative_to(vault))
+            for path in sorted(work.glob("Updates EngMs*.md"))
+        ],
+    }
+
+
+def safe_work_note(vault: Path, relative_path: str) -> Path:
+    work_root = (vault / WORK_RELATIVE_PATH).resolve()
+    candidate = (vault / relative_path).resolve()
+    if candidate != work_root and work_root not in candidate.parents:
+        raise CommandCenterError("Work note must be inside the Work folder.")
+    if candidate.suffix.lower() != ".md" or not candidate.is_file():
+        raise CommandCenterError(f"Work note does not exist: {relative_path}")
+    if "Drawings" in candidate.relative_to(work_root).parts:
+        raise CommandCenterError("Work Drawings are index-only.")
+    return candidate
+
+
+def read_work_note(vault: Path, relative_path: str) -> dict[str, Any]:
+    note = safe_work_note(vault, relative_path)
+    return {
+        "path": str(note.relative_to(vault)),
+        "content": note.read_text(encoding="utf-8"),
+    }
+
+
+def search_work(vault: Path, query: str, limit: int) -> list[dict[str, Any]]:
+    normalized = query.casefold().strip()
+    if not normalized:
+        raise CommandCenterError("Work search query cannot be empty.")
+    results: list[dict[str, Any]] = []
+    work_root = (vault / WORK_RELATIVE_PATH).resolve()
+    for note in sorted(work_root.rglob("*.md")):
+        resolved = note.resolve()
+        if work_root not in resolved.parents:
+            continue
+        relative_parts = resolved.relative_to(work_root).parts
+        if "1-1" in relative_parts or "Drawings" in relative_parts:
+            continue
+        for line_number, line in enumerate(
+            resolved.read_text(encoding="utf-8").splitlines(),
+            start=1,
+        ):
+            if normalized in line.casefold():
+                results.append(
+                    {
+                        "path": str(note.relative_to(vault)),
+                        "line_number": line_number,
+                        "text": line.strip(),
+                    }
+                )
+                if len(results) >= limit:
+                    return results
+    return results
+
+
+def work_target(
+    vault: Path,
+    kind: str,
+    target_date: str | None,
+) -> Path:
+    work = vault / WORK_RELATIVE_PATH
+    if kind == "one_on_one":
+        if not target_date:
+            raise CommandCenterError("--date is required for a 1-1 note.")
+        validate_iso_date(target_date)
+        return work / "1-1" / f"{target_date}.md"
+    fixed = {
+        "quarterly": work / "Quarterly Tasks.md",
+        "queries": work / "Queries.md",
+        "generic": work / "Generic Notes.md",
+    }
+    if kind in fixed:
+        return fixed[kind]
+    directories = {
+        "brag": work / "Brag doc",
+        "connects": work / "Connects",
+    }
+    latest = latest_markdown(directories[kind])
+    if latest is None:
+        filename = (
+            f"{date.today().isoformat()}.md"
+            if kind == "brag"
+            else f"{date.today().strftime('%Y-%m')}.md"
+        )
+        return directories[kind] / filename
+    return latest
+
+
+def append_work_note(
+    vault: Path,
+    kind: str,
+    text: str,
+    target_date: str | None,
+) -> dict[str, Any]:
+    normalized = " ".join(text.split())
+    if not normalized or "\n" in text or "\r" in text:
+        raise CommandCenterError("Work entry must fit on one non-empty line.")
+    note = work_target(vault, kind, target_date)
+    with path_lock(note):
+        note.parent.mkdir(parents=True, exist_ok=True)
+        content = note.read_text(encoding="utf-8").rstrip() if note.exists() else ""
+        atomic_write(
+            note,
+            append_line_to_section(content, "Command Center", f"- {normalized}"),
+        )
+    return {
+        "kind": kind,
+        "text": normalized,
+        "path": str(note.relative_to(vault)),
+    }
+
+
+def work_briefing(vault: Path) -> dict[str, Any]:
+    today = date.today()
+    open_tasks = [task for task in parse_work_tasks(vault) if not task.completed]
+    today_tasks = [task for task in open_tasks if task.task_date == today.isoformat()]
+    recent_overdue = [
+        task
+        for task in open_tasks
+        if today - timedelta(days=30)
+        <= date.fromisoformat(task.task_date)
+        < today
+    ]
+    older_open_count = sum(
+        date.fromisoformat(task.task_date) < today - timedelta(days=30)
+        for task in open_tasks
+    )
+    sources = work_sources(vault)
+    return {
+        "today": [asdict(task) for task in today_tasks],
+        "recent_overdue": [asdict(task) for task in recent_overdue],
+        "older_open_count": older_open_count,
+        "latest_one_on_one": sources["one_on_one"][-1]
+        if sources["one_on_one"]
+        else None,
+        "latest_brag": sources["brag"][-1] if sources["brag"] else None,
+        "latest_connects": sources["connects"][-1]
+        if sources["connects"]
+        else None,
+    }
+
+
+def credential(name: str, keychain_service: str) -> str:
+    value = os.environ.get(name)
+    if value:
+        return value
+    result = run_process(
+        ["security", "find-generic-password", "-s", keychain_service, "-w"],
+        allow_failure=True,
+    )
+    if result.returncode == 0 and result.stdout.strip():
+        return result.stdout.strip()
+    raise IntegrationError(
+        f"{name} is not configured. Store it in macOS Keychain service "
+        f"'{keychain_service}'."
+    )
+
+
+def http_json(url: str, token: str) -> Any:
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+            "User-Agent": "CommandCenter/1.0",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raise IntegrationError(f"BookIt API returned HTTP {exc.code}.") from exc
+    except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+        raise IntegrationError(f"BookIt API request failed: {type(exc).__name__}.") from exc
+
+
+def bookit_business() -> dict[str, Any]:
+    token = credential("BOOKIT_ADMIN_TOKEN", "command-center-bookit-admin")
+    base_url = os.environ.get(
+        "BOOKIT_API_URL",
+        "https://api.bookit.fyi",
+    ).rstrip("/")
+    overview = http_json(f"{base_url}/admin/metrics/overview", token)
+    subscriptions = http_json(f"{base_url}/admin/subscriptions", token)
+    now = datetime.now().astimezone()
+    renewal_cutoff = now + timedelta(days=30)
+    rows = subscriptions.get("rows", [])
+    active = [
+        row
+        for row in rows
+        if row.get("billing_managed")
+        and row.get("status") == "active"
+        and not row.get("cancelling")
+    ]
+    trials = [
+        row
+        for row in rows
+        if row.get("billing_managed") and row.get("status") == "trialing"
+    ]
+    cancelling = [row for row in rows if row.get("cancelling")]
+    attention_statuses = {
+        "past_due",
+        "unpaid",
+        "incomplete",
+        "incomplete_expired",
+    }
+    attention = [
+        row
+        for row in rows
+        if row.get("sync_error") or row.get("status") in attention_statuses
+    ]
+    manual = [row for row in rows if not row.get("billing_managed")]
+    renewing_soon = [
+        row
+        for row in active
+        if (renewal := parse_optional_datetime(row.get("next_billing_at")))
+        and now <= renewal <= renewal_cutoff
+    ]
+    for collection in (active, trials, cancelling, attention, manual, renewing_soon):
+        collection.sort(
+            key=lambda row: (
+                row.get("next_billing_at")
+                or row.get("ends_at")
+                or "9999",
+                str(row.get("display_name") or "").casefold(),
+            )
+        )
+    return {
+        "overview": overview,
+        "metrics": {
+            key: subscriptions.get(key)
+            for key in (
+                "total_paid_plans",
+                "active",
+                "trialing",
+                "cancelling",
+                "attention",
+                "mrr_cents",
+                "trial_mrr_cents",
+                "cancelling_mrr_cents",
+                "currency",
+            )
+        },
+        "active": active,
+        "trials": trials,
+        "renewing_soon": renewing_soon,
+        "cancelling": cancelling,
+        "attention": attention,
+        "manual": manual,
+    }
+
+
+def parse_optional_datetime(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed.astimezone()
+
+
+def render_logs(
+    vault: Path,
+    name: str,
+    limit: int,
+    level: str | None,
+    text: str | None,
+) -> dict[str, Any]:
+    project = project_by_name(vault, name)
+    if not project.render_service_ids:
+        raise CommandCenterError(f"No Render service is registered for {name}.")
+    validate_project_metadata(
+        project.render_service_ids,
+        project.resend_domains,
+        project.source_paths,
+        [],
+    )
+    if limit < 1 or limit > 100:
+        raise CommandCenterError("Render log limit must be between 1 and 100.")
+    command = [
+        "render",
+        "logs",
+        "--resources",
+        ",".join(project.render_service_ids),
+        "--limit",
+        str(limit),
+        "--output",
+        "json",
+    ]
+    if level:
+        command.extend(["--level", level])
+    if text:
+        command.extend(["--text", text])
+    result = run_process(command)
+    entries = parse_json_stream(result.stdout)
+    logs = []
+    for entry in entries:
+        labels = {
+            label.get("name"): label.get("value")
+            for label in entry.get("labels", [])
+            if isinstance(label, dict)
+        }
+        logs.append(
+            {
+                "timestamp": entry.get("timestamp"),
+                "level": labels.get("level"),
+                "type": labels.get("type"),
+                "message": redact_external_text(str(entry.get("message") or "")),
+            }
+        )
+    return {"project": project.name, "logs": logs}
+
+
+def resend_activity(vault: Path, name: str, limit: int) -> dict[str, Any]:
+    project = project_by_name(vault, name)
+    if not project.resend_domains:
+        raise CommandCenterError(f"No Resend domain is registered for {name}.")
+    if limit < 1 or limit > 100:
+        raise CommandCenterError("Resend limit must be between 1 and 100.")
+    validate_project_metadata(
+        project.render_service_ids,
+        project.resend_domains,
+        project.source_paths,
+        [],
+    )
+    token = credential("RESEND_API_KEY", "command-center-resend-api")
+    domains = tuple(f"@{domain.casefold()}" for domain in project.resend_domains)
+    rows = []
+    counts: dict[str, int] = {}
+    cursor: str | None = None
+    pages_scanned = 0
+    has_more = True
+    while has_more and len(rows) < limit and pages_scanned < 20:
+        query = {"limit": "100"}
+        if cursor:
+            query["after"] = cursor
+        response = http_json(
+            f"https://api.resend.com/emails?{urllib.parse.urlencode(query)}",
+            token,
+        )
+        pages_scanned += 1
+        data = response.get("data", [])
+        for email in data:
+            sender = str(email.get("from") or "")
+            if not sender.casefold().endswith(domains) and not any(
+                domain in sender.casefold() for domain in domains
+            ):
+                continue
+            event = str(email.get("last_event") or "unknown")
+            counts[event] = counts.get(event, 0) + 1
+            rows.append(
+                {
+                    "created_at": email.get("created_at"),
+                    "last_event": event,
+                }
+            )
+            if len(rows) >= limit:
+                break
+        has_more = bool(response.get("has_more"))
+        cursor = str(data[-1].get("id")) if data else None
+        if has_more and not cursor:
+            break
+    return {
+        "project": project.name,
+        "summary": counts,
+        "emails": rows,
+        "recipients_omitted": True,
+        "subjects_omitted": True,
+        "pages_scanned": pages_scanned,
+        "truncated": has_more and pages_scanned >= 20,
+    }
+
+
+def weekly_review(vault: Path) -> dict[str, Any]:
+    health = project_health(vault)
+    learning = list_learning(vault, None, None, False)
+    records = {
+        project.name: len(
+            [record for record in project_records(vault / project.note_path) if record.active]
+        )
+        for project in load_projects(vault)
+        if project.status == "active"
+    }
+    return {
+        "tasks": [
+            task
+            for task in list_tasks(vault, "all", None)
+            if task["relation"] != "future"
+        ],
+        "inbox_count": len(inbox_items(vault)),
+        "learning_pending": len(learning),
+        "work": work_briefing(vault),
+        "project_records": records,
+        "health": health,
+    }
+
+
 def dashboard(vault: Path) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "tasks": list_tasks(vault, "action", None),
+        "work": None,
+        "health": None,
         "github": None,
         "calendar": None,
         "mail": None,
         "errors": {},
     }
     integrations = {
+        "work": lambda: work_briefing(vault),
+        "health": lambda: project_health(vault),
         "github": github_attention,
         "calendar": calendar_today,
         "mail": lambda: mail_attention(None),
@@ -1300,6 +2322,57 @@ def build_parser() -> argparse.ArgumentParser:
     project_add.add_argument("--path")
     project_add.add_argument("--github")
     project_add.add_argument("--area", choices=["personal", "work"], default="personal")
+    project_add.add_argument(
+        "--lifecycle",
+        choices=["planned", "development", "live", "maintenance", "paused"],
+        default="development",
+    )
+    project_add.add_argument("--source-path", action="append", default=[])
+    project_add.add_argument("--health-check", action="append", default=[])
+    project_add.add_argument("--render-service-id", action="append", default=[])
+    project_add.add_argument("--resend-domain", action="append", default=[])
+    project_health_parser = commands.add_parser("project-health")
+    project_health_parser.add_argument("--name")
+
+    capture = commands.add_parser("capture")
+    capture.add_argument("--text", required=True)
+    capture.add_argument("--source", default="Χρήστης (chat)")
+    capture.add_argument("--project")
+    commands.add_parser("inbox-list")
+
+    learning_list = commands.add_parser("learning-list")
+    learning_list.add_argument("--kind", choices=list(LEARNING_KINDS))
+    learning_list.add_argument("--project")
+    learning_list.add_argument("--include-done", action="store_true")
+    learning_add = commands.add_parser("learning-add")
+    learning_add.add_argument("--title", required=True)
+    learning_add.add_argument("--kind", required=True, choices=list(LEARNING_KINDS))
+    learning_add.add_argument("--url")
+    learning_add.add_argument("--project")
+    learning_add.add_argument("--source", default="Χρήστης (chat)")
+    learning_complete = commands.add_parser("learning-complete")
+    learning_complete.add_argument("--query", required=True)
+
+    commands.add_parser("work-briefing")
+    commands.add_parser("work-sources")
+    work_read = commands.add_parser("work-read")
+    work_read.add_argument("--path", required=True)
+    work_search = commands.add_parser("work-search")
+    work_search.add_argument("--query", required=True)
+    work_search.add_argument("--limit", type=int, default=50)
+    work_task_add = commands.add_parser("work-task-add")
+    work_task_add.add_argument("--title", required=True)
+    work_task_add.add_argument("--date", required=True)
+    work_task_complete = commands.add_parser("work-task-complete")
+    work_task_complete.add_argument("--query", required=True)
+    work_append = commands.add_parser("work-append")
+    work_append.add_argument(
+        "--kind",
+        required=True,
+        choices=["brag", "connects", "one_on_one", "quarterly", "queries", "generic"],
+    )
+    work_append.add_argument("--text", required=True)
+    work_append.add_argument("--date")
 
     commands.add_parser("github")
     commands.add_parser("calendar-list")
@@ -1312,6 +2385,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     mail = commands.add_parser("mail")
     mail.add_argument("--query")
+    commands.add_parser("bookit-business")
+    render_logs_parser = commands.add_parser("render-logs")
+    render_logs_parser.add_argument("--name", required=True)
+    render_logs_parser.add_argument("--limit", type=int, default=30)
+    render_logs_parser.add_argument("--level")
+    render_logs_parser.add_argument("--text")
+    resend_parser = commands.add_parser("resend-emails")
+    resend_parser.add_argument("--name", required=True)
+    resend_parser.add_argument("--limit", type=int, default=20)
+    commands.add_parser("weekly-review")
     commands.add_parser("dashboard")
     return parser
 
@@ -1375,11 +2458,60 @@ def main() -> None:
                         vault,
                         args.name,
                         args.area,
+                        args.lifecycle,
                         args.path,
                         args.github,
+                        args.render_service_id,
+                        args.resend_domain,
+                        args.source_path,
+                        args.health_check,
                     )
                 )
             )
+        elif args.command == "project-health":
+            emit({"checks": project_health(vault, args.name)})
+        elif args.command == "capture":
+            emit(capture_note(vault, args.text, args.source, args.project))
+        elif args.command == "inbox-list":
+            emit({"items": inbox_items(vault)})
+        elif args.command == "learning-list":
+            emit(
+                {
+                    "items": list_learning(
+                        vault,
+                        args.kind,
+                        args.project,
+                        args.include_done,
+                    )
+                }
+            )
+        elif args.command == "learning-add":
+            emit(
+                add_learning(
+                    vault,
+                    args.title,
+                    args.kind,
+                    args.url,
+                    args.project,
+                    args.source,
+                )
+            )
+        elif args.command == "learning-complete":
+            emit(complete_learning(vault, args.query))
+        elif args.command == "work-briefing":
+            emit(work_briefing(vault))
+        elif args.command == "work-sources":
+            emit(work_sources(vault))
+        elif args.command == "work-read":
+            emit(read_work_note(vault, args.path))
+        elif args.command == "work-search":
+            emit({"matches": search_work(vault, args.query, args.limit)})
+        elif args.command == "work-task-add":
+            emit(add_work_task(vault, args.title, args.date))
+        elif args.command == "work-task-complete":
+            emit(complete_work_task(vault, args.query))
+        elif args.command == "work-append":
+            emit(append_work_note(vault, args.kind, args.text, args.date))
         elif args.command == "github":
             emit(github_attention())
         elif args.command == "calendar-list":
@@ -1397,6 +2529,22 @@ def main() -> None:
             )
         elif args.command == "mail":
             emit({"messages": mail_attention(args.query)})
+        elif args.command == "bookit-business":
+            emit(bookit_business())
+        elif args.command == "render-logs":
+            emit(
+                render_logs(
+                    vault,
+                    args.name,
+                    args.limit,
+                    args.level,
+                    args.text,
+                )
+            )
+        elif args.command == "resend-emails":
+            emit(resend_activity(vault, args.name, args.limit))
+        elif args.command == "weekly-review":
+            emit(weekly_review(vault))
         elif args.command == "dashboard":
             emit(dashboard(vault))
         else:
