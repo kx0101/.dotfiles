@@ -132,23 +132,42 @@ def snapshot() -> dict[str, Any]:
     )
     audit = run_cli("audit-list", "--limit", "100")
     scratchpad = run_cli("scratchpad-get")
-    sanitized_projects = [
-        {
-            "name": project["name"],
-            "status": project["status"],
-            "lifecycle": project["lifecycle"],
-            "github": project["github"],
-            "tasks": run_cli(
+    sanitized_projects = []
+    for project in projects["projects"]:
+        if project["area"] != "personal":
+            continue
+        records = run_cli(
+            "project-records",
+            "--name",
+            project["name"],
+            "--kind",
+            "note",
+        )["records"]
+        sanitized_projects.append(
+            {
+                "name": project["name"],
+                "status": project["status"],
+                "lifecycle": project["lifecycle"],
+                "github": project["github"],
+                "tasks": run_cli(
                 "task-list",
                 "--project",
                 project["name"],
                 "--view",
                 "all",
-            )["tasks"],
-        }
-        for project in projects["projects"]
-        if project["area"] == "personal"
-    ]
+                )["tasks"],
+                "notes": [
+                    {
+                        "id": record["id"],
+                        "timestamp": record["timestamp"],
+                        "text": record["text"],
+                        "source": record["source"],
+                    }
+                    for record in records
+                    if record.get("active", True)
+                ],
+            }
+        )
     return {
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "personal_tasks": daily["personal"],

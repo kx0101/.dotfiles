@@ -102,6 +102,13 @@ function renderAgenda(events) {
   }
   for (const event of events) {
     const row = element("div", "agenda-row");
+    const completed =
+      event.completed === true ||
+      event.title.startsWith("✓ ") ||
+      (event.all_day === "false" &&
+        event.end &&
+        new Date(event.end) <= new Date());
+    if (completed) row.classList.add("agenda-completed");
     const time = element(
       "span",
       "agenda-time",
@@ -547,6 +554,28 @@ function renderProjectDetail(payload) {
     empty(tasks, "Δεν υπάρχουν ανοιχτά tasks.");
   }
   detail.append(detailSection("Εργασίες", tasks));
+
+  const notes = element("div", "list");
+  const noteRecords = (payload.recent_records ?? []).filter(
+    (record) => record.kind === "note" && record.active,
+  );
+  if (noteRecords.length) {
+    for (const note of noteRecords) {
+      const card = element("article", "list-item");
+      card.append(
+        element("p", "", note.text),
+        element(
+          "p",
+          "item-meta",
+          `${formatGreekDateTime(note.timestamp)} · ${note.source}`,
+        ),
+      );
+      notes.append(card);
+    }
+  } else {
+    empty(notes, "Δεν υπάρχουν σημειώσεις έργου.");
+  }
+  detail.append(detailSection("Σημειώσεις έργου", notes));
 
   const github = payload.github ?? {};
   const githubStats = element("div", "detail-stats");

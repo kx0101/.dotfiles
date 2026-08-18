@@ -76,6 +76,12 @@ Todo capture may target an open parent by stable daily-file line number. No
 selection creates a new root parent. Personal task storage remains flat in
 `Tasks.md`; the daily file preserves the selected hierarchy and carries it
 forward. Vercel project-note capture routes to append-only `project-record`.
+Project modals display only `kind=note` records, not summaries or the full record
+stream.
+
+Agenda rows are marked complete when a due-today Reminder is completed, a Work
+Calendar todo title begins with `✓`, or a timed event has ended. Completed rows
+remain visible with strikethrough.
 
 ## Cloud synchronization
 

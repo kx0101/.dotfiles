@@ -144,6 +144,13 @@ function renderAgenda(events) {
   }
   for (const event of events) {
     const row = element("div", "agenda-row");
+    const completed =
+      event.completed === true ||
+      event.title.startsWith("✓ ") ||
+      (event.all_day === "false" &&
+        event.end &&
+        new Date(event.end) <= new Date());
+    if (completed) row.classList.add("agenda-completed");
     row.append(
       element(
         "span",
@@ -400,6 +407,25 @@ function openProject(project) {
     empty(tasks, "Δεν υπάρχουν ανοιχτά tasks.");
   }
   detail.append(detailSection("Εργασίες", tasks));
+
+  const notes = element("div", "list");
+  if (project.notes?.length) {
+    for (const note of project.notes) {
+      const card = element("article", "list-item");
+      card.append(
+        element("p", "", note.text),
+        element(
+          "p",
+          "item-meta",
+          `${formatGreekDateTime(note.timestamp)} · ${note.source}`,
+        ),
+      );
+      notes.append(card);
+    }
+  } else {
+    empty(notes, "Δεν υπάρχουν σημειώσεις έργου.");
+  }
+  detail.append(detailSection("Σημειώσεις έργου", notes));
 
   const github = snapshotPayload.github ?? {};
   const authored = (github.authored_open ?? []).filter(

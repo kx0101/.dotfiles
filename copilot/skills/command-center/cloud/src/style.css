@@ -355,6 +355,15 @@ body.history-mode #clear-scratchpad {
   border-top: 0;
 }
 
+.agenda-row.agenda-completed {
+  color: var(--muted);
+  opacity: 0.65;
+}
+
+.agenda-row.agenda-completed .agenda-title {
+  text-decoration: line-through;
+}
+
 .agenda-time {
   min-width: 70px;
   color: var(--accent);

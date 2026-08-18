@@ -1805,7 +1805,7 @@ return output as text
     return events
 
 
-def reminders_today() -> list[dict[str, str]]:
+def reminders_today() -> list[dict[str, Any]]:
     script = APPLE_SCRIPT_HELPERS + r'''
 set startDate to current date
 set time of startDate to 0
@@ -1815,15 +1815,13 @@ tell application "Reminders"
     repeat with targetList in lists
         set listName to name of targetList
         repeat with reminderItem in reminders of targetList
-            if completed of reminderItem is false then
-                try
-                    set dueDate to due date of reminderItem
-                    if dueDate is not missing value and dueDate >= startDate and dueDate < endDate then
-                        set reminderLine to my cleanText(listName) & tab & my cleanText(name of reminderItem) & tab & my isoDate(dueDate)
-                        set end of output to reminderLine
-                    end if
-                end try
-            end if
+            try
+                set dueDate to due date of reminderItem
+                if dueDate is not missing value and dueDate >= startDate and dueDate < endDate then
+                    set reminderLine to my cleanText(listName) & tab & my cleanText(name of reminderItem) & tab & my isoDate(dueDate) & tab & (completed of reminderItem as text)
+                    set end of output to reminderLine
+                end if
+            end try
         end repeat
     end repeat
 end tell
@@ -1832,7 +1830,7 @@ return output as text
 '''
     reminders = parse_tabular_output(
         run_osascript(script),
-        ["list", "title", "due"],
+        ["list", "title", "due", "completed"],
     )
     return [
         {
@@ -1844,13 +1842,15 @@ return output as text
             "kind": "reminder",
             "url": "",
             "description": "",
+            "completed": reminder["completed"] == "true",
         }
         for reminder in reminders
     ]
 
 
-def calendar_today() -> list[dict[str, str]]:
+def calendar_today() -> list[dict[str, Any]]:
     events = calendar_events_today()
+    now = datetime.now()
     for event in events:
         calendar = event["calendar"].casefold()
         event["kind"] = (
@@ -1861,6 +1861,13 @@ def calendar_today() -> list[dict[str, str]]:
             else "note"
             if "note" in calendar
             else "event"
+        )
+        event["completed"] = (
+            event["title"].startswith("✓ ")
+            or (
+                event["all_day"] == "false"
+                and datetime.fromisoformat(event["end"]) <= now
+            )
         )
     events.extend(reminders_today())
     events.sort(key=lambda event: (event["start"], event["calendar"], event["title"]))

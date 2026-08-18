@@ -91,7 +91,10 @@ It never includes Mail bodies, complete Work notes, local paths, or credentials.
 Allowlisted mutations are executed locally through the CLI. Apple Health uses a
 separate owner-only table and restricted ingest token.
 Vercel project-note capture must use `project-record`; project history remains
-append-only.
+append-only. Project modals show project notes only.
+
+Keep completed Agenda items visible with strikethrough. A Reminder is complete
+from its macOS completion state; a timed call is complete after its end time.
 
 Show the briefing modal only on the first browser open of each day. Surface sync
 status and the append-only audit timeline. Daily history uses owner-only Supabase
