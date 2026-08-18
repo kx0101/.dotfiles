@@ -506,11 +506,45 @@ function renderTasks() {
   applyVisibility();
 }
 
+function selectedCaptureKind() {
+  const kind = $("#capture-kind").value;
+  return ["task", "learning"].includes(kind)
+    ? $("#capture-subtype").value
+    : kind;
+}
+
+function configureCaptureSubtype() {
+  const kind = $("#capture-kind").value;
+  const select = $("#capture-subtype");
+  const previous = select.value;
+  const options =
+    kind === "task"
+      ? [
+          ["personal-task", "Προσωπικά"],
+          ["work-task", "Δουλειά"],
+        ]
+      : kind === "learning"
+        ? [
+            ["book", "Βιβλίο"],
+            ["article", "Άρθρο"],
+            ["video", "Βίντεο"],
+          ]
+        : [];
+  select.replaceChildren(
+    ...options.map(([value, label]) => new Option(label, value)),
+  );
+  select.classList.toggle("hidden", !options.length);
+  if (options.some(([value]) => value === previous)) {
+    select.value = previous;
+  }
+  updateCaptureFields();
+}
+
 function renderCaptureParents() {
   const select = $("#capture-parent");
   const selected = select.value;
   select.replaceChildren(new Option("Νέο κύριο todo", ""));
-  const kind = $("#capture-kind").value;
+  const kind = selectedCaptureKind();
   const now = new Date();
   const today = new Date(
     now.getTime() - now.getTimezoneOffset() * 60_000,
@@ -1043,7 +1077,7 @@ async function completeReminder(reminder, checkbox, row) {
 }
 
 function updateCaptureFields() {
-  const kind = $("#capture-kind").value;
+  const kind = selectedCaptureKind();
   const dated = new Set(["personal-task", "work-task", "reminder"]).has(kind);
   const learning = new Set(["book", "article", "video"]).has(kind);
   const projectAware = learning || kind === "project-note";
@@ -1061,7 +1095,7 @@ async function addCapture(event) {
   const button = event.submitter ?? $("#capture-form button[type='submit']");
   button.disabled = true;
   const title = $("#capture-title").value.trim();
-  const kind = $("#capture-kind").value;
+  const kind = selectedCaptureKind();
   const captureDate = $("#capture-date").value;
   const url = $("#capture-url").value.trim();
   const project = $("#capture-project").value;
@@ -1328,12 +1362,15 @@ function initialize() {
   });
   $("#scratchpad").addEventListener("input", scheduleScratchpadSave);
   $("#clear-scratchpad").addEventListener("click", clearScratchpad);
-  $("#capture-kind").addEventListener("change", updateCaptureFields);
+  $("#capture-kind").addEventListener("change", configureCaptureSubtype);
+  $("#capture-subtype").addEventListener("change", updateCaptureFields);
   $("#capture-date").addEventListener("change", renderCaptureParents);
   document.querySelectorAll(".learning-tab").forEach((tab) => {
     tab.addEventListener("click", () => {
       state.learningKind = tab.dataset.kind;
-      $("#capture-kind").value = state.learningKind;
+      $("#capture-kind").value = "learning";
+      configureCaptureSubtype();
+      $("#capture-subtype").value = state.learningKind;
       updateCaptureFields();
       renderLearning(state.learning?.items ?? []);
     });
@@ -1356,7 +1393,7 @@ function initialize() {
   )
     .toISOString()
     .slice(0, 16);
-  updateCaptureFields();
+  configureCaptureSubtype();
   applyVisibility();
   refresh();
 }

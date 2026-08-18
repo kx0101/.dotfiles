@@ -378,11 +378,45 @@ function renderProjects(projects) {
   }
 }
 
+function selectedCaptureKind() {
+  const kind = $("#capture-kind").value;
+  return ["task", "learning"].includes(kind)
+    ? $("#capture-subtype").value
+    : kind;
+}
+
+function configureCaptureSubtype() {
+  const kind = $("#capture-kind").value;
+  const select = $("#capture-subtype");
+  const previous = select.value;
+  const options =
+    kind === "task"
+      ? [
+          ["personal-task", "Προσωπικά"],
+          ["work-task", "Δουλειά"],
+        ]
+      : kind === "learning"
+        ? [
+            ["book", "Βιβλίο"],
+            ["article", "Άρθρο"],
+            ["video", "Βίντεο"],
+          ]
+        : [];
+  select.replaceChildren(
+    ...options.map(([value, label]) => new Option(label, value)),
+  );
+  select.classList.toggle("hidden", !options.length);
+  if (options.some(([value]) => value === previous)) {
+    select.value = previous;
+  }
+  updateCaptureFields();
+}
+
 function renderCaptureParents() {
   const select = $("#capture-parent");
   const selected = select.value;
   select.replaceChildren(new Option("Νέο κύριο todo", ""));
-  const kind = $("#capture-kind").value;
+  const kind = selectedCaptureKind();
   if (
     !["personal-task", "work-task"].includes(kind) ||
     $("#capture-date").value !== localDate() ||
@@ -1092,7 +1126,7 @@ async function deleteTodo(area, item, entityKey, button) {
 }
 
 function updateCaptureFields() {
-  const kind = $("#capture-kind").value;
+  const kind = selectedCaptureKind();
   const learning = ["book", "article", "video"].includes(kind);
   const todo = ["personal-task", "work-task"].includes(kind);
   const projectNote = kind === "project-note";
@@ -1109,7 +1143,7 @@ async function capture(event) {
   if (isHistorical()) return;
   const button = event.submitter ?? $("#capture-form button[type='submit']");
   button.disabled = true;
-  const kind = $("#capture-kind").value;
+  const kind = selectedCaptureKind();
   const action = {
     "personal-task": "add-personal-task",
     "work-task": "add-work-task",
@@ -1435,7 +1469,8 @@ async function initialize() {
   }
   $("#refresh").addEventListener("click", refresh);
   $("#capture-form").addEventListener("submit", capture);
-  $("#capture-kind").addEventListener("change", updateCaptureFields);
+  $("#capture-kind").addEventListener("change", configureCaptureSubtype);
+  $("#capture-subtype").addEventListener("change", updateCaptureFields);
   $("#capture-date").addEventListener("change", renderCaptureParents);
   $("#scratchpad").addEventListener("input", scheduleScratchpadSave);
   $("#clear-scratchpad").addEventListener("click", () => {
@@ -1492,7 +1527,9 @@ async function initialize() {
   document.querySelectorAll(".learning-tab").forEach((tab) => {
     tab.addEventListener("click", () => {
       learningKind = tab.dataset.kind;
-      $("#capture-kind").value = learningKind;
+      $("#capture-kind").value = "learning";
+      configureCaptureSubtype();
+      $("#capture-subtype").value = learningKind;
       updateCaptureFields();
       renderLearning(snapshotPayload.learning ?? []);
     });
@@ -1505,7 +1542,7 @@ async function initialize() {
       $("#search-query").focus();
     }
   });
-  updateCaptureFields();
+  configureCaptureSubtype();
   const { data } = await supabase.auth.getSession();
   await updateAuth(data.session);
   supabase.auth.onAuthStateChange((_event, nextSession) => {

@@ -143,6 +143,7 @@ undated Work inbox tasks. Dated Work tasks live in the matching Work Daily Note.
   source order, with each child indented exactly one level below its parent.
 - Todo capture may choose an open daily parent. Pass its stable line number to
   `task-add` or `work-task-add`; no parent creates a root todo.
+- Work children use the next direct numbered sibling, never a bullet marker.
 
 Daily task files are generated per date under
 `Command Center/Daily Tasks/<N. Month YYYY>/` for Personal and

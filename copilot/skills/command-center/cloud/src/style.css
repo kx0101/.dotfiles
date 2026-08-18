@@ -156,7 +156,7 @@ h2 {
 
 .capture-bar {
   display: grid;
-  grid-template-columns: minmax(280px, 1fr) auto auto auto auto auto;
+  grid-template-columns: minmax(260px, 1fr) repeat(7, auto);
   gap: 6px;
   margin-bottom: 10px;
   padding: 9px;

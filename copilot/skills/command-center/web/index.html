@@ -51,14 +51,16 @@
           required
         >
         <select id="capture-kind" name="kind" aria-label="Τύπος capture">
-          <option value="personal-task">Todo στα Προσωπικά</option>
-          <option value="work-task">Todo στη Δουλειά</option>
+          <option value="task">Task</option>
           <option value="reminder">Υπενθύμιση</option>
-          <option value="book">Βιβλίο</option>
-          <option value="article">Άρθρο</option>
-          <option value="video">Βίντεο</option>
+          <option value="learning">Μάθηση</option>
           <option value="project-note">Σημείωση έργου</option>
         </select>
+        <select
+          id="capture-subtype"
+          name="subtype"
+          aria-label="Υποκατηγορία"
+        ></select>
         <input id="capture-date" name="date" type="date">
         <input
           id="capture-url"

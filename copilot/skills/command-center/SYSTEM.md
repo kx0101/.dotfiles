@@ -80,6 +80,9 @@ Todo capture may target an open parent by stable daily-file line number. No
 selection creates a new root parent. Personal task storage remains flat in
 `Tasks.md`; the daily file preserves the selected hierarchy and carries it
 forward. Vercel project-note capture routes to append-only `project-record`.
+Work children use the next direct numbered sibling (`1.`, `2.`, `3.`), matching
+the established Obsidian list format. Capture uses a primary type dropdown and a
+contextual subtype dropdown.
 Project modals display only `kind=note` records, not summaries or the full record
 stream.
 Deleting a project note appends an `archive` tombstone that supersedes the note;

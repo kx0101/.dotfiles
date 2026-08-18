@@ -3969,6 +3969,9 @@ def add_work_task(
                 - len(lines[parent_index].lstrip(" \t"))
             )
             insertion = parent_index + 1
+            direct_child_indent = None
+            direct_child_leading = None
+            child_numbers: list[int] = []
             while insertion < len(lines):
                 candidate = WORK_TASK_PATTERN.match(lines[insertion])
                 if candidate:
@@ -3978,13 +3981,32 @@ def add_work_task(
                     )
                     if indent <= parent_indent:
                         break
+                    if (
+                        direct_child_indent is None
+                        or indent < direct_child_indent
+                    ):
+                        direct_child_indent = indent
+                        direct_child_leading = lines[insertion][
+                            : len(lines[insertion])
+                            - len(lines[insertion].lstrip(" \t"))
+                        ]
+                        child_numbers = []
+                    if indent == direct_child_indent:
+                        number_match = re.fullmatch(
+                            r"(\d+)\.",
+                            candidate.group("prefix").strip(),
+                        )
+                        if number_match:
+                            child_numbers.append(int(number_match.group(1)))
                 insertion += 1
             leading = lines[parent_index][
                 : len(lines[parent_index])
                 - len(lines[parent_index].lstrip(" \t"))
             ]
+            child_leading = direct_child_leading or f"{leading}\t"
+            next_number = max(child_numbers, default=0) + 1
             nested_line = (
-                f"{leading}\t- [ ] {normalized_title}"
+                f"{child_leading}{next_number}. [ ] {normalized_title}"
                 f"{calendar_metadata(calendar_name, calendar_uid, sync_provider)}"
             )
             lines.insert(insertion, nested_line)
