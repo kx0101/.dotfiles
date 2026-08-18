@@ -1301,7 +1301,7 @@ async function refresh() {
 
 function initialize() {
   const now = new Date();
-  $("#greeting").textContent = "kx@σήμερα";
+  $("#greeting").textContent = "kx";
   $("#today").textContent = new Intl.DateTimeFormat("el-GR", {
     weekday: "long",
     day: "numeric",

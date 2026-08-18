@@ -2239,7 +2239,32 @@ on run argv
             set calName to name of cal
             set matchingEvents to every event of cal whose start date < endDate and end date > startDate
             repeat with evt in matchingEvents
-                set eventLine to my cleanText(calName) & tab & my cleanText(summary of evt) & tab & my isoDate(start date of evt) & tab & my isoDate(end date of evt) & tab & (allday event of evt as text)
+                try
+                    set rawURL to url of evt
+                    if rawURL is missing value then
+                        set eventURL to ""
+                    else
+                        set eventURL to my cleanText(rawURL as text)
+                    end if
+                on error
+                    set eventURL to ""
+                end try
+                try
+                    set rawDescription to description of evt
+                    if rawDescription is missing value then
+                        set eventDescription to ""
+                    else
+                        set eventDescription to my cleanText(rawDescription as text)
+                    end if
+                on error
+                    set eventDescription to ""
+                end try
+                try
+                    set eventUID to uid of evt as text
+                on error
+                    set eventUID to ""
+                end try
+                set eventLine to my cleanText(calName) & tab & my cleanText(summary of evt) & tab & my isoDate(start date of evt) & tab & my isoDate(end date of evt) & tab & (allday event of evt as text) & tab & eventURL & tab & eventDescription & tab & eventUID
                 set end of output to eventLine
             end repeat
         end repeat
@@ -2250,8 +2275,36 @@ end run
 '''
     events = parse_tabular_output(
         run_osascript(script, [str(days)]),
-        ["calendar", "title", "start", "end", "all_day"],
+        [
+            "calendar",
+            "title",
+            "start",
+            "end",
+            "all_day",
+            "url",
+            "description",
+            "uid",
+        ],
     )
+    for event in events:
+        calendar = event["calendar"].casefold()
+        event["kind"] = (
+            "birthday"
+            if "birthday" in calendar
+            else "holiday"
+            if "holiday" in calendar
+            else "note"
+            if "note" in calendar
+            else "event"
+        )
+        event["completed"] = False
+        ref_match = re.search(
+            r"(?:^|\s)Ref:\s*([A-Za-z0-9]+)",
+            event["description"],
+        )
+        event["command_center_ref"] = (
+            ref_match.group(1) if ref_match else None
+        )
     events.sort(key=lambda event: (event["start"], event["calendar"], event["title"]))
     return events
 

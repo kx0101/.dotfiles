@@ -23,7 +23,11 @@ function localDate(value = new Date()) {
 }
 
 function isHistorical() {
-  return selectedDate !== localDate();
+  return selectedDate < localDate();
+}
+
+function isFuture() {
+  return selectedDate > localDate();
 }
 
 function taskEntityKey(area, item) {
@@ -419,7 +423,7 @@ function renderCaptureParents() {
   const kind = selectedCaptureKind();
   if (
     !["personal-task", "work-task"].includes(kind) ||
-    $("#capture-date").value !== localDate() ||
+    $("#capture-date").value !== selectedDate ||
     isHistorical()
   ) {
     return;
@@ -735,7 +739,26 @@ function renderCalendars(calendars) {
 }
 
 function renderSnapshot(snapshot) {
-  snapshotPayload = snapshot?.payload ?? {};
+  const rawPayload = snapshot?.payload ?? {};
+  if (isFuture()) {
+    const plan = rawPayload.daily_plans?.[selectedDate] ?? {
+      personal: [],
+      work: [],
+    };
+    snapshotPayload = {
+      ...rawPayload,
+      agenda: (rawPayload.calendar_plan ?? []).filter(
+        (item) => item.start?.slice(0, 10) === selectedDate,
+      ),
+      personal_tasks: plan.personal,
+      work_tasks: plan.work,
+      reminders: (rawPayload.reminders ?? []).filter(
+        (item) => item.due?.slice(0, 10) === selectedDate,
+      ),
+    };
+  } else {
+    snapshotPayload = rawPayload;
+  }
   const pending = (action, predicate) =>
     pendingCommands.some(
       (command) => command.action === action && predicate(command.payload),
@@ -986,7 +1009,7 @@ async function loadHealth() {
     .select(
       "day,steps,sleep_minutes,active_energy_kcal,resting_heart_rate,updated_at",
     );
-  query = isHistorical()
+  query = selectedDate !== localDate()
     ? query.eq("day", selectedDate).maybeSingle()
     : query.order("day", { ascending: false }).limit(1).maybeSingle();
   const { data, error } = await query;
@@ -1342,7 +1365,7 @@ function briefingSection(title, items) {
 }
 
 function maybeShowBriefing() {
-  if (isHistorical()) return;
+  if (selectedDate !== localDate()) return;
   const day = localDate();
   if (localStorage.getItem("command-center-briefing-date") === day) return;
   const content = $("#briefing-content");
@@ -1396,7 +1419,12 @@ async function refresh() {
   } else {
     $("#scratchpad").readOnly = false;
     document.body.classList.remove("history-mode");
-    $("#history-mode").textContent = "Ζωντανή προβολή";
+    $("#history-mode").textContent = isFuture()
+      ? `Προγραμματισμός ${selectedDate}`
+      : "Ζωντανή προβολή";
+    if (isFuture()) {
+      setStatus(`Προγραμματισμός για ${selectedDate}`);
+    }
   }
   await loadSyncStatus(snapshot);
   maybeShowBriefing();
@@ -1426,6 +1454,15 @@ async function updateAuth(nextSession) {
 async function selectHistoryDate(value) {
   selectedDate = value;
   $("#history-date").value = value;
+  if (!isHistorical()) {
+    $("#capture-date").value = value;
+    const start = new Date(`${value}T09:00:00`);
+    $("#event-start").value = new Date(
+      start.getTime() - start.getTimezoneOffset() * 60_000,
+    )
+      .toISOString()
+      .slice(0, 16);
+  }
   await refresh();
 }
 
@@ -1437,7 +1474,7 @@ function shiftHistoryDate(days) {
 
 function initializeDate() {
   const now = new Date();
-  $("#greeting").textContent = "kx@σήμερα";
+  $("#greeting").textContent = "kx";
   $("#today").textContent = new Intl.DateTimeFormat("el-GR", {
     weekday: "long",
     day: "numeric",

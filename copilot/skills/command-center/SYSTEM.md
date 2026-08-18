@@ -70,7 +70,9 @@ It is not Inbox, project memory, or a Markdown note.
 
 The first dashboard open per browser/day shows a dismissible briefing modal.
 Closing it stores the date in browser local storage. The date navigator switches
-to owner-only historical snapshots; past dates are read-only.
+to owner-only historical snapshots; past dates are read-only. Future dates use
+the current 30-day Calendar plan, open Reminders, and existing Personal/Work
+daily files, so scheduled events appear before that day's snapshot exists.
 
 Task and Reminder rows support title/date editing. Local writes call CLI update
 commands directly; Vercel writes enter the allowlisted queue and use pending

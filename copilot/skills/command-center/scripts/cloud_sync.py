@@ -9,7 +9,7 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -114,6 +114,7 @@ def snapshot() -> dict[str, Any]:
     learning = run_cli("learning-list")
     projects = run_cli("project-list")
     agenda = run_cli("calendar-today")
+    calendar_plan = run_cli("calendar-range", "--days", "31")
     calendars = run_cli("calendar-list")
     system_health = run_cli("project-health")
     mail = run_cli(
@@ -132,6 +133,18 @@ def snapshot() -> dict[str, Any]:
     )
     audit = run_cli("audit-list", "--limit", "100")
     scratchpad = run_cli("scratchpad-get")
+    today = datetime.now().astimezone().date()
+    daily_plans: dict[str, Any] = {}
+    for offset in range(1, 31):
+        plan_date = (today + timedelta(days=offset)).isoformat()
+        tasks = run_cli(
+            "daily-tasks",
+            "--date",
+            plan_date,
+            "--include-completed",
+        )
+        if tasks["personal"] or tasks["work"]:
+            daily_plans[plan_date] = tasks
     sanitized_projects = []
     for project in projects["projects"]:
         if project["area"] != "personal":
@@ -176,6 +189,8 @@ def snapshot() -> dict[str, Any]:
         "learning": learning["items"],
         "projects": sanitized_projects,
         "agenda": agenda["events"],
+        "calendar_plan": calendar_plan["events"],
+        "daily_plans": daily_plans,
         "calendars": calendars["calendars"],
         "system_health": system_health["checks"],
         "mail": mail["messages"],
