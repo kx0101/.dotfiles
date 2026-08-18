@@ -29,6 +29,7 @@ from typing import Any
 TASKS_RELATIVE_PATH = Path("Command Center/Tasks.md")
 PROJECTS_RELATIVE_PATH = Path("Command Center/Projects")
 INBOX_RELATIVE_PATH = Path("Command Center/Inbox.md")
+WAITING_ON_RELATIVE_PATH = Path("Command Center/Waiting-on.md")
 LEARNING_RELATIVE_PATH = Path("Command Center/Learning.md")
 WORK_RELATIVE_PATH = Path("Work")
 TASK_PATTERN = re.compile(r"^- \[(?P<state>[ xX])\] (?P<body>.+)$")
@@ -84,6 +85,10 @@ LEARNING_KINDS = {
 }
 LEARNING_ITEM_PATTERN = re.compile(
     r"^- \[(?P<state>[ xX])\] (?P<title>.*?) "
+    r"<!-- cc: (?P<metadata>\{.*\}) -->$"
+)
+WAITING_ITEM_PATTERN = re.compile(
+    r"^- \[(?P<state>[ xX])\] (?P<person>.+?) — (?P<item>.+?) "
     r"<!-- cc: (?P<metadata>\{.*\}) -->$"
 )
 WORK_TASK_PATTERN = re.compile(
@@ -172,6 +177,16 @@ class LearningItem:
     project: str | None
     source: str
     added: str
+    completed: bool
+    line_number: int
+
+
+@dataclass
+class WaitingOnItem:
+    id: str
+    person: str
+    item: str
+    due_date: str | None
     completed: bool
     line_number: int
 
@@ -1992,6 +2007,119 @@ def inbox_items(vault: Path) -> list[dict[str, Any]]:
     return items
 
 
+def ensure_waiting_on_file(vault: Path) -> Path:
+    path = vault / WAITING_ON_RELATIVE_PATH
+    if not path.exists():
+        atomic_write(path, "# Waiting on\n\n")
+    return path
+
+
+def parse_waiting_on(vault: Path) -> list[WaitingOnItem]:
+    path = vault / WAITING_ON_RELATIVE_PATH
+    if not path.is_file():
+        return []
+    items: list[WaitingOnItem] = []
+    for index, line in enumerate(path.read_text(encoding="utf-8").splitlines()):
+        match = WAITING_ITEM_PATTERN.match(line)
+        if not match:
+            continue
+        try:
+            metadata = json.loads(match.group("metadata"))
+        except json.JSONDecodeError as exc:
+            raise CommandCenterError(
+                f"Malformed Waiting-on metadata on line {index + 1}."
+            ) from exc
+        items.append(
+            WaitingOnItem(
+                id=str(metadata["id"]),
+                person=match.group("person").strip(),
+                item=match.group("item").strip(),
+                due_date=metadata.get("due"),
+                completed=match.group("state").lower() == "x",
+                line_number=index + 1,
+            )
+        )
+    return items
+
+
+def add_waiting_on(
+    vault: Path,
+    person: str,
+    item: str,
+    due_date: str | None,
+) -> dict[str, Any]:
+    person = " ".join(person.split())
+    item = " ".join(item.split())
+    if not person or not item:
+        raise CommandCenterError("Waiting-on person and item are required.")
+    validate_project_memory(person, "Χρήστης (chat)")
+    validate_project_memory(item, "Χρήστης (chat)")
+    if due_date:
+        validate_iso_date(due_date)
+    record_id = f"waiting-{uuid.uuid4().hex[:10]}"
+    metadata = {"id": record_id}
+    if due_date:
+        metadata["due"] = due_date
+    line = (
+        f"- [ ] {person} — {item} "
+        f"<!-- cc: {json.dumps(metadata, ensure_ascii=False, sort_keys=True)} -->"
+    )
+    path = vault / WAITING_ON_RELATIVE_PATH
+    with path_lock(path):
+        path = ensure_waiting_on_file(vault)
+        atomic_write(path, path.read_text(encoding="utf-8").rstrip() + "\n" + line + "\n")
+    return {
+        "id": record_id,
+        "person": person,
+        "item": item,
+        "due_date": due_date,
+        "completed": False,
+    }
+
+
+def list_waiting_on(vault: Path, include_completed: bool) -> list[dict[str, Any]]:
+    today = date.today().isoformat()
+    items = [
+        asdict(item)
+        for item in parse_waiting_on(vault)
+        if include_completed or not item.completed
+    ]
+    for item in items:
+        item["overdue"] = bool(
+            item["due_date"] and not item["completed"] and item["due_date"] < today
+        )
+    return items
+
+
+def complete_waiting_on(vault: Path, query: str) -> dict[str, Any]:
+    normalized = " ".join(query.split()).casefold()
+    matches = [
+        item
+        for item in parse_waiting_on(vault)
+        if not item.completed
+        and (
+            normalized == item.item.casefold()
+            or normalized in item.item.casefold()
+            or normalized == item.person.casefold()
+        )
+    ]
+    if not matches:
+        raise CommandCenterError(f"No open Waiting-on item matches: {query}")
+    if len(matches) > 1:
+        raise CommandCenterError(
+            f"Multiple open Waiting-on items match: {query}",
+            [asdict(item) for item in matches],
+        )
+    item = matches[0]
+    path = vault / WAITING_ON_RELATIVE_PATH
+    with path_lock(path):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        line = lines[item.line_number - 1]
+        lines[item.line_number - 1] = line.replace("- [ ] ", "- [x] ", 1)
+        atomic_write(path, "\n".join(lines).rstrip() + "\n")
+    return asdict(item) | {"completed": True}
+
+
 def ensure_learning_file(vault: Path) -> Path:
     path = vault / LEARNING_RELATIVE_PATH
     if not path.exists():
@@ -2820,6 +2948,133 @@ def home(
     }
 
 
+def exception_center(vault: Path) -> dict[str, Any]:
+    exceptions: list[dict[str, Any]] = []
+    errors: dict[str, str] = {}
+    overdue_tasks = list_tasks(vault, "overdue", None)
+    exceptions.extend(
+        {"kind": "task", "severity": "warning", "item": task}
+        for task in overdue_tasks
+    )
+    waiting = list_waiting_on(vault, False)
+    exceptions.extend(
+        {"kind": "waiting-on", "severity": "warning", "item": item}
+        for item in waiting
+        if item["overdue"]
+    )
+
+    try:
+        health = project_health(vault)
+        exceptions.extend(
+            {"kind": "health", "severity": "critical", "item": check}
+            for check in health
+            if not check["up"]
+        )
+    except IntegrationError as exc:
+        errors["health"] = str(exc)
+
+    try:
+        github = github_attention()
+        exceptions.extend(
+            {"kind": "ci", "severity": "critical", "item": failure}
+            for failure in github["failing_ci"]
+        )
+    except IntegrationError as exc:
+        errors["github"] = str(exc)
+
+    projects = load_projects(vault)
+    bookit = next(
+        (project for project in projects if project.name.casefold() == "bookit"),
+        None,
+    )
+    if bookit:
+        try:
+            business = bookit_business()
+            for row in business["attention"]:
+                exceptions.append(
+                    {
+                        "kind": "subscription",
+                        "severity": "critical",
+                        "item": {
+                            "display_name": row.get("display_name"),
+                            "status": row.get("status"),
+                            "sync_error": row.get("sync_error"),
+                        },
+                    }
+                )
+            for row in business["trials"]:
+                exceptions.append(
+                    {
+                        "kind": "trial",
+                        "severity": "warning",
+                        "item": {
+                            "display_name": row.get("display_name"),
+                            "ends_at": row.get("ends_at"),
+                        },
+                    }
+                )
+            for row in business["cancelling"]:
+                exceptions.append(
+                    {
+                        "kind": "cancellation",
+                        "severity": "warning",
+                        "item": {
+                            "display_name": row.get("display_name"),
+                            "ends_at": row.get("ends_at"),
+                        },
+                    }
+                )
+            for row in business["renewing_soon"]:
+                exceptions.append(
+                    {
+                        "kind": "renewal",
+                        "severity": "info",
+                        "item": {
+                            "display_name": row.get("display_name"),
+                            "next_billing_at": row.get("next_billing_at"),
+                        },
+                    }
+                )
+        except IntegrationError as exc:
+            errors["bookit"] = str(exc)
+
+    for project in projects:
+        if not project.resend_domains:
+            continue
+        try:
+            resend = resend_activity(vault, project.name, 5)
+            for email in resend["emails"]:
+                if str(email["last_event"]).lower() in {"bounced", "failed"}:
+                    exceptions.append(
+                        {
+                            "kind": "email",
+                            "severity": "critical",
+                            "item": {
+                                "project": project.name,
+                                "subject": email["subject"],
+                                "recipients": email["recipients"],
+                                "last_event": email["last_event"],
+                            },
+                        }
+                    )
+        except IntegrationError as exc:
+            errors[f"resend:{project.name}"] = str(exc)
+
+    severity_order = {"critical": 0, "warning": 1, "info": 2}
+    exceptions.sort(key=lambda entry: severity_order[entry["severity"]])
+    return {
+        "exceptions": exceptions,
+        "waiting_on": waiting,
+        "summary": {
+            "total": len(exceptions),
+            "critical": sum(item["severity"] == "critical" for item in exceptions),
+            "warning": sum(item["severity"] == "warning" for item in exceptions),
+            "info": sum(item["severity"] == "info" for item in exceptions),
+        },
+        "errors": errors,
+    }
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = JsonArgumentParser(description="Obsidian command-center helper")
     parser.add_argument("--vault", help="Override the Obsidian vault path")
@@ -2895,6 +3150,14 @@ def build_parser() -> argparse.ArgumentParser:
     capture.add_argument("--source", default="Χρήστης (chat)")
     capture.add_argument("--project")
     commands.add_parser("inbox-list")
+    waiting_add = commands.add_parser("waiting-add")
+    waiting_add.add_argument("--person", required=True)
+    waiting_add.add_argument("--item", required=True)
+    waiting_add.add_argument("--due")
+    waiting_list = commands.add_parser("waiting-list")
+    waiting_list.add_argument("--include-completed", action="store_true")
+    waiting_complete = commands.add_parser("waiting-complete")
+    waiting_complete.add_argument("--query", required=True)
 
     learning_list = commands.add_parser("learning-list")
     learning_list.add_argument("--kind", choices=list(LEARNING_KINDS))
@@ -2958,6 +3221,7 @@ def build_parser() -> argparse.ArgumentParser:
     resend_parser.add_argument("--limit", type=int, default=5)
     commands.add_parser("weekly-review")
     commands.add_parser("dashboard")
+    commands.add_parser("exceptions")
     home_parser = commands.add_parser("home")
     home_parser.add_argument("--include-personal", action="store_true")
     home_parser.add_argument("--include-work", action="store_true")
@@ -3039,6 +3303,19 @@ def main() -> None:
             emit(capture_note(vault, args.text, args.source, args.project))
         elif args.command == "inbox-list":
             emit({"items": inbox_items(vault)})
+        elif args.command == "waiting-add":
+            emit(add_waiting_on(vault, args.person, args.item, args.due))
+        elif args.command == "waiting-list":
+            emit(
+                {
+                    "items": list_waiting_on(
+                        vault,
+                        args.include_completed,
+                    )
+                }
+            )
+        elif args.command == "waiting-complete":
+            emit(complete_waiting_on(vault, args.query))
         elif args.command == "learning-list":
             emit(
                 {
@@ -3116,6 +3393,8 @@ def main() -> None:
             emit(weekly_review(vault))
         elif args.command == "dashboard":
             emit(dashboard(vault))
+        elif args.command == "exceptions":
+            emit(exception_center(vault))
         elif args.command == "home":
             emit(home(vault, args.include_personal, args.include_work))
         else:

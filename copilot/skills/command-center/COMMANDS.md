@@ -13,6 +13,7 @@ errors are written to stderr as JSON and exit non-zero.
 
 ```bash
 python3 scripts/command_center.py dashboard
+python3 scripts/command_center.py exceptions
 python3 scripts/command_center.py home
 python3 scripts/command_center.py home --include-personal --include-work
 python3 scripts/command_center.py task-list --view action
@@ -97,6 +98,13 @@ python3 scripts/command_center.py capture \
   --project BookIt
 
 python3 scripts/command_center.py inbox-list
+
+python3 scripts/command_center.py waiting-add \
+  --person "Alex" \
+  --item "Να στείλει το production access" \
+  --due 2026-08-21
+python3 scripts/command_center.py waiting-list
+python3 scripts/command_center.py waiting-complete --query "production access"
 
 python3 scripts/command_center.py learning-add \
   --kind article \

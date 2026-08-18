@@ -29,6 +29,15 @@ The opening surface is `home`: it combines the morning dashboard with the weekly
 review. Personal and Work daily tasks are optional sections and are included only
 when the user asks for them or the application preference enables them.
 
+Use `exceptions` for the attention-only view. It aggregates overdue tasks, overdue
+Waiting-on items, failed health checks/CI, Resend bounces, and BookIt trial,
+cancellation, renewal, or subscription attention states. External responses remain
+ephemeral and are not written to the vault.
+
+Waiting-on entries are local Markdown data managed only through `waiting-add`,
+`waiting-list`, and `waiting-complete`. They contain a person, an expected action,
+and an optional due date.
+
 ## Tasks
 
 `Command Center/Tasks.md` is the source of truth for personal/project tasks and
