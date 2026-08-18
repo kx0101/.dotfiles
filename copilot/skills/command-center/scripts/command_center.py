@@ -1308,6 +1308,37 @@ return output as text
     return events
 
 
+def calendar_range(days: int) -> list[dict[str, str]]:
+    if days < 1 or days > 365:
+        raise CommandCenterError("Calendar range must be between 1 and 365 days.")
+    script = APPLE_SCRIPT_HELPERS + r'''
+on run argv
+    set rangeDays to item 1 of argv as integer
+    set startDate to current date
+    set endDate to startDate + (rangeDays * days)
+    set output to {}
+    tell application "Calendar"
+        repeat with cal in calendars
+            set calName to name of cal
+            set matchingEvents to every event of cal whose start date < endDate and end date > startDate
+            repeat with evt in matchingEvents
+                set eventLine to my cleanText(calName) & tab & my cleanText(summary of evt) & tab & my isoDate(start date of evt) & tab & my isoDate(end date of evt) & tab & (allday event of evt as text)
+                set end of output to eventLine
+            end repeat
+        end repeat
+    end tell
+    set AppleScript's text item delimiters to linefeed
+    return output as text
+end run
+'''
+    events = parse_tabular_output(
+        run_osascript(script, [str(days)]),
+        ["calendar", "title", "start", "end", "all_day"],
+    )
+    events.sort(key=lambda event: (event["start"], event["calendar"], event["title"]))
+    return events
+
+
 def add_calendar_event(
     calendar: str,
     title: str,
@@ -2392,6 +2423,8 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("github")
     commands.add_parser("calendar-list")
     commands.add_parser("calendar-today")
+    calendar_range_parser = commands.add_parser("calendar-range")
+    calendar_range_parser.add_argument("--days", type=int, default=14)
     calendar_add = commands.add_parser("calendar-add")
     calendar_add.add_argument("--calendar", required=True)
     calendar_add.add_argument("--title", required=True)
@@ -2533,6 +2566,8 @@ def main() -> None:
             emit({"calendars": calendar_names()})
         elif args.command == "calendar-today":
             emit({"events": calendar_today()})
+        elif args.command == "calendar-range":
+            emit({"events": calendar_range(args.days)})
         elif args.command == "calendar-add":
             emit(
                 add_calendar_event(

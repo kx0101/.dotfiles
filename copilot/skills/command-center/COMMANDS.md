@@ -25,6 +25,7 @@ python3 scripts/command_center.py project-health
 python3 scripts/command_center.py weekly-review
 python3 scripts/command_center.py github
 python3 scripts/command_center.py calendar-today
+python3 scripts/command_center.py calendar-range --days 14
 python3 scripts/command_center.py mail
 python3 scripts/command_center.py mail --query "invoice"
 ```
