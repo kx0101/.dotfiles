@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import webbrowser
@@ -37,6 +38,9 @@ COMMANDS = {
     "/api/calendars": ("calendar-list",),
     "/api/apple-health": ("health-personal",),
     "/api/scratchpad": ("scratchpad-get",),
+    "/api/sync-status": ("sync-status",),
+    "/api/audit": ("audit-list", "--limit", "100"),
+    "/api/snapshots": ("snapshot-list",),
 }
 
 
@@ -83,6 +87,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 ("search", "--query", queries[0].strip(), "--limit", "50")
             )
             return
+        if path == "/api/snapshot":
+            dates = parse_qs(parsed.query).get("date", [])
+            if len(dates) != 1 or len(dates[0]) != 10:
+                self._send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {"error": "A valid snapshot date is required."},
+                )
+                return
+            self._serve_command(("snapshot-get", "--date", dates[0]))
+            return
         if path in COMMANDS:
             self._serve_command(COMMANDS[path])
             return
@@ -99,10 +113,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
         allowed_paths = {
             "/api/task/add",
             "/api/task/complete",
+            "/api/task/reopen",
+            "/api/task/update",
             "/api/learning/add",
             "/api/learning/complete",
             "/api/reminder/add",
             "/api/reminder/complete",
+            "/api/reminder/update",
             "/api/capture",
             "/api/calendar/add",
             "/api/scratchpad",
@@ -196,6 +213,35 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
 
         title = str(payload.get("title") or "").strip()
+        if path == "/api/reminder/update":
+            identifier = str(payload.get("id") or "").strip()
+            reminder_date = str(payload.get("date") or "").strip()
+            if (
+                not identifier
+                or len(identifier) > 500
+                or not title
+                or len(title) > 300
+                or len(reminder_date) != 10
+            ):
+                self._send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {"error": "Valid Reminder update data is required."},
+                )
+                return
+            self._serve_command(
+                (
+                    "reminder-update",
+                    "--list",
+                    "Reminders",
+                    "--id",
+                    identifier,
+                    "--title",
+                    title,
+                    "--date",
+                    reminder_date,
+                )
+            )
+            return
         if path == "/api/calendar/add":
             calendar = str(payload.get("calendar") or "").strip()
             start = str(payload.get("start") or "").strip()
@@ -368,6 +414,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         area = str(payload.get("area") or "")
         task_date = str(payload.get("date") or "")
+        current_date = str(payload.get("current_date") or task_date)
         if (
             not title
             or len(title) > 300
@@ -385,13 +432,44 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 if area == "Personal"
                 else ("work-task-add", "--title", title, "--date", task_date)
             )
+        elif path in {"/api/task/complete", "/api/task/reopen"}:
+            command_name = (
+                "task-complete"
+                if area == "Personal" and path.endswith("/complete")
+                else "task-reopen"
+                if area == "Personal"
+                else "work-task-complete"
+                if path.endswith("/complete")
+                else "work-task-reopen"
+            )
+            command = (
+                command_name,
+                "--query",
+                title,
+                "--date",
+                task_date,
+            )
         else:
             command = (
-                ("task-complete", "--query", title, "--date", task_date)
+                (
+                    "task-update",
+                    "--query",
+                    str(payload.get("old_title") or title),
+                    "--current-date",
+                    current_date,
+                    "--title",
+                    title,
+                    "--date",
+                    task_date,
+                )
                 if area == "Personal"
                 else (
-                    "work-task-complete",
+                    "work-task-update",
                     "--query",
+                    str(payload.get("old_title") or title),
+                    "--current-date",
+                    current_date,
+                    "--title",
                     title,
                     "--date",
                     task_date,
@@ -423,6 +501,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 capture_output=True,
                 text=True,
                 timeout=180,
+                env={**os.environ, "COMMAND_CENTER_SOURCE": "local-web"},
             )
         except subprocess.TimeoutExpired:
             self._send_json(

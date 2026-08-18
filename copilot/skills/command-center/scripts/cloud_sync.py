@@ -57,6 +57,7 @@ def run_cli(*arguments: str) -> dict[str, Any]:
         check=False,
         capture_output=True,
         text=True,
+        env={**os.environ, "COMMAND_CENTER_SOURCE": "vercel"},
     )
     stream = result.stdout if result.returncode == 0 else result.stderr
     try:
@@ -129,6 +130,8 @@ def snapshot() -> dict[str, Any]:
         "--limit",
         "5",
     )
+    audit = run_cli("audit-list", "--limit", "100")
+    scratchpad = run_cli("scratchpad-get")
     sanitized_projects = [
         {
             "name": project["name"],
@@ -160,6 +163,8 @@ def snapshot() -> dict[str, Any]:
         "github": github,
         "bookit_business": bookit_business,
         "bookit_emails": bookit_emails,
+        "audit": audit["events"],
+        "scratchpad": scratchpad,
     }
 
 
@@ -168,6 +173,8 @@ def push_snapshot(
     service_key: str,
     user_id: str,
 ) -> None:
+    payload = snapshot()
+    now = datetime.now().astimezone()
     request_json(
         base_url,
         service_key,
@@ -175,8 +182,21 @@ def push_snapshot(
         "command_center_snapshots?on_conflict=user_id",
         {
             "user_id": user_id,
-            "payload": snapshot(),
-            "updated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "payload": payload,
+            "updated_at": now.isoformat(timespec="seconds"),
+        },
+        prefer="resolution=merge-duplicates,return=minimal",
+    )
+    request_json(
+        base_url,
+        service_key,
+        "POST",
+        "command_center_daily_snapshots?on_conflict=user_id,day",
+        {
+            "user_id": user_id,
+            "day": now.date().isoformat(),
+            "payload": payload,
+            "updated_at": now.isoformat(timespec="seconds"),
         },
         prefer="resolution=merge-duplicates,return=minimal",
     )
@@ -240,6 +260,58 @@ def command_arguments(command: dict[str, Any]) -> tuple[str, ...]:
         return (
             "work-task-complete",
             "--query",
+            title,
+            "--date",
+            task_date,
+        )
+    if action == "reopen-personal-task":
+        return (
+            "task-reopen",
+            "--query",
+            title,
+            "--date",
+            task_date,
+        )
+    if action == "reopen-work-task":
+        return (
+            "work-task-reopen",
+            "--query",
+            title,
+            "--date",
+            task_date,
+        )
+    if action == "update-personal-task":
+        return (
+            "task-update",
+            "--query",
+            str(payload.get("old_title") or ""),
+            "--current-date",
+            str(payload.get("current_date") or ""),
+            "--title",
+            title,
+            "--date",
+            task_date,
+        )
+    if action == "update-work-task":
+        return (
+            "work-task-update",
+            "--query",
+            str(payload.get("old_title") or ""),
+            "--current-date",
+            str(payload.get("current_date") or ""),
+            "--title",
+            title,
+            "--date",
+            task_date,
+        )
+    if action == "update-reminder":
+        return (
+            "reminder-update",
+            "--list",
+            "Reminders",
+            "--id",
+            str(payload.get("id") or ""),
+            "--title",
             title,
             "--date",
             task_date,

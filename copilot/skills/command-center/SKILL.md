@@ -60,6 +60,9 @@ JSON-only POST actions. Route Personal through `task-add`/`task-complete` so
 Tasks, the Personal daily file, and Reminders stay synchronized. Route Work
 through `work-task-add`/`work-task-complete` so its Daily Note and Calendar stay
 synchronized. Completed daily tasks remain visible as checked items.
+Task and Reminder edits must route through the corresponding update command so
+title/date changes propagate to Markdown and macOS. Historical snapshot views are
+read-only.
 
 The Learning panel has separate Books, Articles, and Videos views. Additions must
 use `learning-add`; removal from the pending view must use `learning-complete`,
@@ -87,6 +90,10 @@ email activity, BookIt billing, calendar names, and project operational metadata
 It never includes Mail bodies, complete Work notes, local paths, or credentials.
 Allowlisted mutations are executed locally through the CLI. Apple Health uses a
 separate owner-only table and restricted ingest token.
+
+Show the briefing modal only on the first browser open of each day. Surface sync
+status and the append-only audit timeline. Daily history uses owner-only Supabase
+snapshots selected through the date navigator.
 
 Use `exceptions` for the attention-only view. It aggregates overdue tasks, overdue
 Waiting-on items, failed health checks/CI, Resend bounces, and BookIt trial,

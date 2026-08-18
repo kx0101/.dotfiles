@@ -33,6 +33,13 @@ INBOX_RELATIVE_PATH = Path("Command Center/Inbox.md")
 WAITING_ON_RELATIVE_PATH = Path("Command Center/Waiting-on.md")
 LEARNING_RELATIVE_PATH = Path("Command Center/Learning.md")
 WORK_RELATIVE_PATH = Path("Work")
+AUDIT_PATH = (
+    Path.home()
+    / "Library"
+    / "Application Support"
+    / "Command Center"
+    / "audit.jsonl"
+)
 TASK_PATTERN = re.compile(r"^- \[(?P<state>[ xX])\] (?P<body>.+)$")
 ACTION_DATE_PATTERN = re.compile(r"\s+📅\s+(?P<date>\d{4}-\d{2}-\d{2})")
 COMPLETED_DATE_PATTERN = re.compile(r"\s+✅\s+(?P<date>\d{4}-\d{2}-\d{2})")
@@ -294,6 +301,58 @@ def path_lock(path: Path):
             yield
         finally:
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def audit_event(
+    action: str,
+    entity: str,
+    title: str,
+    details: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    normalized_title = " ".join(title.split())
+    values = [action, entity, normalized_title, json.dumps(details or {})]
+    if any(
+        SENSITIVE_VALUE_PATTERN.search(value)
+        or SENSITIVE_SHAPE_PATTERN.search(value)
+        for value in values
+    ):
+        raise CommandCenterError("Audit event contains credential-like data.")
+    event = {
+        "id": uuid.uuid4().hex,
+        "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "source": os.environ.get("COMMAND_CENTER_SOURCE", "cli"),
+        "action": action,
+        "entity": entity,
+        "title": normalized_title,
+        "details": details or {},
+    }
+    with path_lock(AUDIT_PATH):
+        AUDIT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with AUDIT_PATH.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(event, ensure_ascii=False) + "\n")
+    return event
+
+
+def audit_list(limit: int) -> list[dict[str, Any]]:
+    if limit < 1 or limit > 500:
+        raise CommandCenterError("Audit limit must be between 1 and 500.")
+    if not AUDIT_PATH.is_file():
+        return []
+    events: list[dict[str, Any]] = []
+    for line_number, line in enumerate(
+        AUDIT_PATH.read_text(encoding="utf-8").splitlines(),
+        start=1,
+    ):
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise CommandCenterError(
+                f"Malformed audit event on line {line_number}."
+            ) from exc
+        events.append(event)
+    return list(reversed(events[-limit:]))
 
 
 def validate_iso_date(value: str) -> str:
@@ -662,6 +721,12 @@ def add_task(
             title,
             action_date,
         )
+    audit_event(
+        "added",
+        "task",
+        title,
+        {"area": section, "date": action_date},
+    )
     return {
         "title": title,
         "section": section,
@@ -744,11 +809,79 @@ def complete_task(
             task.title,
             task.action_date,
         )
+    audit_event(
+        "completed",
+        "task",
+        task.title,
+        {"area": task.section, "date": task.action_date},
+    )
     return {
         "title": task.title,
         "section": task.section,
         "status": "completed",
         "completed_date": completed_date,
+        "daily_synced": daily_synced,
+    }
+
+
+def reopen_task(
+    vault: Path,
+    query: str,
+    action_date: str,
+) -> dict[str, Any]:
+    validate_iso_date(action_date)
+    normalized = " ".join(query.split()).casefold()
+    tasks_path = vault / TASKS_RELATIVE_PATH
+    with path_lock(tasks_path):
+        matches = [
+            task
+            for task in parse_tasks(tasks_path)
+            if task.completed
+            and task.action_date == action_date
+            and task.title.casefold() == normalized
+        ]
+        if len(matches) != 1:
+            raise CommandCenterError(
+                f"Expected one completed task matching: {query}",
+                [asdict(task) for task in matches],
+            )
+        task = matches[0]
+        if task.calendar_name and task.calendar_uid:
+            update_synced_todo(
+                task.sync_provider or "reminders",
+                task.calendar_name,
+                task.calendar_uid,
+                title=task.title,
+                action_date=action_date,
+                completed=False,
+            )
+        line = task_line(
+            task.title,
+            completed=False,
+            action_date=action_date,
+            calendar_name=task.calendar_name,
+            calendar_uid=task.calendar_uid,
+            sync_provider=task.sync_provider,
+        )
+        replace_task_line(tasks_path, task, line)
+    daily_synced = False
+    if section_uses_personal_daily(vault, task.section):
+        daily_synced = reopen_personal_daily_task(
+            vault,
+            task.title,
+            action_date,
+        )
+    audit_event(
+        "reopened",
+        "task",
+        task.title,
+        {"area": task.section, "date": action_date},
+    )
+    return {
+        "title": task.title,
+        "section": task.section,
+        "status": "open",
+        "date": action_date,
         "daily_synced": daily_synced,
     }
 
@@ -801,6 +934,16 @@ def reschedule_task(vault: Path, query: str, action_date: str) -> dict[str, Any]
                 task.title,
                 action_date,
             )
+    audit_event(
+        "rescheduled",
+        "task",
+        task.title,
+        {
+            "area": task.section,
+            "from_date": task.action_date,
+            "to_date": action_date,
+        },
+    )
     return {
         "title": task.title,
         "section": task.section,
@@ -809,6 +952,81 @@ def reschedule_task(vault: Path, query: str, action_date: str) -> dict[str, Any]
         "calendar": calendar_name,
         "calendar_uid": calendar_uid,
         "sync_provider": sync_provider,
+        "daily_path": daily_path,
+    }
+
+
+def update_task(
+    vault: Path,
+    query: str,
+    current_date: str,
+    new_title: str,
+    new_date: str,
+) -> dict[str, Any]:
+    validate_iso_date(current_date)
+    validate_iso_date(new_date)
+    new_title = " ".join(new_title.split())
+    if not new_title or "\n" in new_title or "\r" in new_title:
+        raise CommandCenterError("Task title must fit on one non-empty line.")
+    tasks_path = vault / TASKS_RELATIVE_PATH
+    with path_lock(tasks_path):
+        task = select_task(tasks_path, query, current_date)
+        sync_provider = task.sync_provider or "reminders"
+        calendar_name = task.calendar_name or "Reminders"
+        calendar_uid = task.calendar_uid
+        if calendar_uid:
+            update_synced_todo(
+                sync_provider,
+                calendar_name,
+                calendar_uid,
+                title=new_title,
+                action_date=new_date,
+                completed=False,
+            )
+        else:
+            calendar_uid = add_synced_todo(
+                sync_provider,
+                calendar_name,
+                new_title,
+                new_date,
+            )
+        line = task_line(
+            new_title,
+            completed=False,
+            action_date=new_date,
+            calendar_name=calendar_name,
+            calendar_uid=calendar_uid,
+            sync_provider=sync_provider,
+        )
+        replace_task_line(tasks_path, task, line)
+    daily_path = None
+    if section_uses_personal_daily(vault, task.section):
+        daily_path = update_personal_daily_task(
+            vault,
+            task.title,
+            current_date,
+            new_title,
+            new_date,
+        )
+    audit_event(
+        "updated",
+        "task",
+        new_title,
+        {
+            "old_title": task.title,
+            "area": task.section,
+            "from_date": current_date,
+            "to_date": new_date,
+        },
+    )
+    return {
+        "title": new_title,
+        "old_title": task.title,
+        "section": task.section,
+        "from_date": current_date,
+        "to_date": new_date,
+        "calendar": calendar_name,
+        "calendar_uid": calendar_uid,
         "daily_path": daily_path,
     }
 
@@ -1301,6 +1519,12 @@ def record_project(
             note,
             append_record_to_content(note.read_text(encoding="utf-8"), block),
         )
+    audit_event(
+        "recorded",
+        "project",
+        name,
+        {"kind": kind, "record_id": record.id},
+    )
     return record
 
 
@@ -1827,6 +2051,28 @@ def add_reminder_todo(list_name: str, title: str, action_date: str) -> str:
     return add_reminder_item(list_name, title, action_date)
 
 
+def create_reminder(
+    list_name: str,
+    title: str,
+    action_date: str | None,
+) -> dict[str, Any]:
+    normalized_title = " ".join(title.split())
+    identifier = add_reminder_item(list_name, normalized_title, action_date)
+    audit_event(
+        "added",
+        "reminder",
+        normalized_title,
+        {"list": list_name, "date": action_date},
+    )
+    return {
+        "id": identifier,
+        "title": normalized_title,
+        "list": list_name,
+        "date": action_date,
+        "status": "open",
+    }
+
+
 def list_reminders(vault: Path, list_name: str) -> list[dict[str, Any]]:
     if list_name not in reminder_list_names():
         raise CommandCenterError(f"Unknown macOS Reminders list: {list_name}")
@@ -1913,6 +2159,12 @@ on run argv
 end run
 '''
     title = run_osascript(script, [list_name, reminder_id])
+    audit_event(
+        "completed",
+        "reminder",
+        title,
+        {"list": list_name},
+    )
     return {
         "provider": "reminders",
         "id": reminder_id,
@@ -1971,6 +2223,72 @@ end run
             str(parsed_date.day if parsed_date else 0),
         ],
     )
+
+
+def update_reminder(
+    vault: Path,
+    list_name: str,
+    reminder_id: str,
+    new_title: str,
+    new_date: str,
+) -> dict[str, Any]:
+    validate_iso_date(new_date)
+    new_title = " ".join(new_title.split())
+    if not new_title:
+        raise CommandCenterError("Reminder title cannot be empty.")
+    matches = [
+        task
+        for task in parse_tasks(vault / TASKS_RELATIVE_PATH)
+        if task.calendar_uid == reminder_id and not task.completed
+    ]
+    if len(matches) > 1:
+        raise CommandCenterError("Multiple tasks share the same Reminder ID.")
+    if matches:
+        task = matches[0]
+        return {
+            "provider": "task",
+            **update_task(
+                vault,
+                task.title,
+                task.action_date or new_date,
+                new_title,
+                new_date,
+            ),
+        }
+    current = next(
+        (
+            reminder
+            for reminder in list_reminders(vault, list_name)
+            if reminder["id"] == reminder_id
+        ),
+        None,
+    )
+    if current is None:
+        raise CommandCenterError("Reminder not found.")
+    update_reminder_todo(
+        list_name,
+        reminder_id,
+        title=new_title,
+        action_date=new_date,
+        completed=False,
+    )
+    audit_event(
+        "updated",
+        "reminder",
+        new_title,
+        {
+            "old_title": current["title"],
+            "from_date": current["due"][:10] if current["due"] else None,
+            "to_date": new_date,
+            "list": list_name,
+        },
+    )
+    return {
+        "provider": "reminders",
+        "id": reminder_id,
+        "title": new_title,
+        "date": new_date,
+    }
 
 
 def add_calendar_todo(calendar: str, title: str, action_date: str) -> str:
@@ -2127,6 +2445,12 @@ end run
             str(parsed_start.minute),
             str(duration),
         ],
+    )
+    audit_event(
+        "added",
+        "calendar-event",
+        title,
+        {"calendar": calendar, "start": start, "duration_minutes": duration},
     )
     return {
         "calendar": calendar,
@@ -2594,6 +2918,12 @@ def add_learning(
         learning = ensure_learning_file(vault)
         ensure_task_section(learning, LEARNING_KINDS[kind])
         append_task(learning, LEARNING_KINDS[kind], line)
+    audit_event(
+        "added",
+        "learning",
+        normalized_title,
+        {"kind": kind, "project": project_name},
+    )
     return metadata | {"title": normalized_title}
 
 
@@ -2642,6 +2972,12 @@ def complete_learning(vault: Path, query: str) -> dict[str, Any]:
         line_index = item.line_number - 1
         lines[line_index] = lines[line_index].replace("- [ ]", "- [x]", 1)
         atomic_write(path, "\n".join(lines).rstrip() + "\n")
+    audit_event(
+        "completed",
+        "learning",
+        item.title,
+        {"kind": item.kind, "project": item.project},
+    )
     return {"id": item.id, "title": item.title, "status": "completed"}
 
 
@@ -2759,6 +3095,34 @@ def complete_personal_daily_task(
     return True
 
 
+def reopen_personal_daily_task(
+    vault: Path,
+    title: str,
+    target_date: str,
+) -> bool:
+    path = personal_daily_path(vault, date.fromisoformat(target_date))
+    if not path.is_file():
+        return False
+    with path_lock(path):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        matches = [
+            index
+            for index, line in enumerate(lines)
+            if (match := DAILY_TASK_PATTERN.match(line))
+            and match.group("state").lower() == "x"
+            and match.group("title").strip().casefold() == title.casefold()
+        ]
+        if len(matches) != 1:
+            return False
+        index = matches[0]
+        match = DAILY_TASK_PATTERN.match(lines[index])
+        if match is None:
+            return False
+        lines[index] = f"{match.group('prefix')}[ ] {title}"
+        atomic_write(path, "\n".join(lines).rstrip() + "\n")
+    return True
+
+
 def move_personal_daily_task(
     vault: Path,
     title: str,
@@ -2772,6 +3136,46 @@ def move_personal_daily_task(
         moved_to=target_date,
     )
     return append_personal_daily_task(vault, title, target_date)
+
+
+def update_personal_daily_task(
+    vault: Path,
+    old_title: str,
+    old_date: str,
+    new_title: str,
+    new_date: str,
+) -> str:
+    if old_date != new_date:
+        complete_personal_daily_task(
+            vault,
+            old_title,
+            old_date,
+            moved_to=new_date,
+        )
+        return append_personal_daily_task(vault, new_title, new_date)
+    path = personal_daily_path(vault, date.fromisoformat(old_date))
+    if not path.is_file():
+        return append_personal_daily_task(vault, new_title, new_date)
+    with path_lock(path):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        matches = [
+            index
+            for index, line in enumerate(lines)
+            if (match := DAILY_TASK_PATTERN.match(line))
+            and match.group("state").lower() != "x"
+            and match.group("title").strip().casefold() == old_title.casefold()
+        ]
+        if len(matches) != 1:
+            raise CommandCenterError(
+                f"Expected one Personal daily task matching: {old_title}"
+            )
+        index = matches[0]
+        match = DAILY_TASK_PATTERN.match(lines[index])
+        if match is None:
+            raise CommandCenterError("Personal daily task changed while selected.")
+        lines[index] = f"{match.group('prefix')}[ ] {new_title}"
+        atomic_write(path, "\n".join(lines).rstrip() + "\n")
+    return str(path.relative_to(vault))
 
 
 def daily_rollover(vault: Path, target_date: str) -> dict[str, Any]:
@@ -2962,6 +3366,12 @@ def add_work_task(vault: Path, title: str, task_date: str) -> dict[str, Any]:
             note,
             append_line_to_section(content, "Command Center", line),
         )
+    audit_event(
+        "added",
+        "work-task",
+        normalized_title,
+        {"date": task_date},
+    )
     return {
         "title": normalized_title,
         "date": task_date,
@@ -3014,7 +3424,63 @@ def complete_work_task(
             f"{calendar_metadata(task.calendar_name, task.calendar_uid, task.sync_provider)}"
         )
         atomic_write(note, "\n".join(lines).rstrip() + "\n")
+    audit_event(
+        "completed",
+        "work-task",
+        task.title,
+        {"date": task.task_date},
+    )
     return asdict(task) | {"completed": True}
+
+
+def reopen_work_task(
+    vault: Path,
+    query: str,
+    task_date: str,
+) -> dict[str, Any]:
+    validate_iso_date(task_date)
+    normalized = query.casefold().strip()
+    matches = [
+        task
+        for task in parse_work_tasks(vault)
+        if task.completed
+        and task.task_date == task_date
+        and task.title.casefold() == normalized
+    ]
+    if len(matches) != 1:
+        raise CommandCenterError(
+            f"Expected one completed Work task matching: {query}",
+            [asdict(task) for task in matches],
+        )
+    task = matches[0]
+    note = vault / task.path
+    with path_lock(note):
+        lines = note.read_text(encoding="utf-8").splitlines()
+        index = task.line_number - 1
+        match = WORK_TASK_PATTERN.match(lines[index])
+        if not match or match.group("state").lower() != "x":
+            raise CommandCenterError("Work note changed while selecting the task.")
+        if task.calendar_name and task.calendar_uid:
+            update_synced_todo(
+                task.sync_provider or "calendar",
+                task.calendar_name,
+                task.calendar_uid,
+                title=task.title,
+                action_date=task_date,
+                completed=False,
+            )
+        lines[index] = (
+            f"{match.group('prefix')}[ ] {task.title}"
+            f"{calendar_metadata(task.calendar_name, task.calendar_uid, task.sync_provider)}"
+        )
+        atomic_write(note, "\n".join(lines).rstrip() + "\n")
+    audit_event(
+        "reopened",
+        "work-task",
+        task.title,
+        {"date": task_date},
+    )
+    return asdict(task) | {"completed": False}
 
 
 def reschedule_work_task(
@@ -3092,6 +3558,12 @@ def reschedule_work_task(
                 target_note,
                 append_line_to_section(content, "Command Center", line),
             )
+    audit_event(
+        "rescheduled",
+        "work-task",
+        task.title,
+        {"from_date": task.task_date, "to_date": task_date},
+    )
     return {
         "title": task.title,
         "from": task.task_date,
@@ -3099,6 +3571,106 @@ def reschedule_work_task(
         "calendar": calendar_name,
         "calendar_uid": calendar_uid,
         "sync_provider": sync_provider,
+    }
+
+
+def update_work_task(
+    vault: Path,
+    query: str,
+    current_date: str,
+    new_title: str,
+    new_date: str,
+) -> dict[str, Any]:
+    validate_iso_date(current_date)
+    validate_iso_date(new_date)
+    normalized = query.casefold().strip()
+    new_title = " ".join(new_title.split())
+    if not new_title or "\n" in new_title or "\r" in new_title:
+        raise CommandCenterError("Work task title must fit on one non-empty line.")
+    matches = [
+        task
+        for task in parse_work_tasks(vault)
+        if not task.completed
+        and task.task_date == current_date
+        and task.title.casefold() == normalized
+    ]
+    if len(matches) != 1:
+        raise CommandCenterError(
+            f"Expected one open Work task matching: {query}",
+            [asdict(task) for task in matches],
+        )
+    task = matches[0]
+    calendar_name = task.calendar_name or "Work"
+    sync_provider = task.sync_provider or "calendar"
+    calendar_uid = task.calendar_uid
+    if calendar_uid:
+        update_synced_todo(
+            sync_provider,
+            calendar_name,
+            calendar_uid,
+            title=new_title,
+            action_date=new_date,
+            completed=False,
+        )
+    else:
+        calendar_uid = add_synced_todo(
+            sync_provider,
+            calendar_name,
+            new_title,
+            new_date,
+        )
+    source_note = vault / task.path
+    target_note = work_daily_path(vault, date.fromisoformat(new_date))
+    with path_lock(source_note):
+        lines = source_note.read_text(encoding="utf-8").splitlines()
+        index = task.line_number - 1
+        match = WORK_TASK_PATTERN.match(lines[index])
+        if not match or match.group("state").lower() == "x":
+            raise CommandCenterError("Work note changed while selecting the task.")
+        if source_note == target_note:
+            lines[index] = (
+                f"{match.group('prefix')}[ ] {new_title}"
+                f"{calendar_metadata(calendar_name, calendar_uid, sync_provider)}"
+            )
+        else:
+            lines[index] = (
+                f"{match.group('prefix')}[x] {task.title} → μεταφέρθηκε {new_date}"
+                f"{calendar_metadata(calendar_name, calendar_uid, sync_provider)}"
+            )
+        atomic_write(source_note, "\n".join(lines).rstrip() + "\n")
+    if source_note != target_note:
+        with path_lock(target_note):
+            target_note.parent.mkdir(parents=True, exist_ok=True)
+            content = (
+                target_note.read_text(encoding="utf-8").rstrip()
+                if target_note.exists()
+                else ""
+            )
+            line = (
+                f"- [ ] {new_title}"
+                f"{calendar_metadata(calendar_name, calendar_uid, sync_provider)}"
+            )
+            atomic_write(
+                target_note,
+                append_line_to_section(content, "Command Center", line),
+            )
+    audit_event(
+        "updated",
+        "work-task",
+        new_title,
+        {
+            "old_title": task.title,
+            "from_date": current_date,
+            "to_date": new_date,
+        },
+    )
+    return {
+        "title": new_title,
+        "old_title": task.title,
+        "from_date": current_date,
+        "to_date": new_date,
+        "calendar": calendar_name,
+        "calendar_uid": calendar_uid,
     }
 
 
@@ -3519,6 +4091,125 @@ def scratchpad_clear() -> dict[str, Any]:
             f"Supabase Scratchpad returned HTTP {exc.code}."
         ) from exc
     return {"content": "", "updated_at": None}
+
+
+def cloud_sync_status() -> dict[str, Any]:
+    base_url = credential(
+        "COMMAND_CENTER_SUPABASE_URL",
+        "command-center-supabase-url",
+    ).rstrip("/")
+    service_key = credential(
+        "COMMAND_CENTER_SUPABASE_SERVICE_KEY",
+        "command-center-supabase-service",
+    )
+    user_id = credential(
+        "COMMAND_CENTER_SUPABASE_USER_ID",
+        "command-center-supabase-user",
+    )
+    headers = {
+        "apikey": service_key,
+        "Authorization": f"Bearer {service_key}",
+        "Accept": "application/json",
+    }
+
+    def read(path: str) -> Any:
+        request = urllib.request.Request(
+            f"{base_url}/rest/v1/{path}",
+            headers=headers,
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            raise IntegrationError(
+                f"Supabase sync status returned HTTP {exc.code}."
+            ) from exc
+
+    snapshot_rows = read(
+        "command_center_snapshots"
+        f"?user_id=eq.{urllib.parse.quote(user_id)}"
+        "&select=updated_at,version"
+    )
+    command_rows = read(
+        "command_center_commands"
+        f"?user_id=eq.{urllib.parse.quote(user_id)}"
+        "&status=in.(pending,processing,failed)"
+        "&select=id,action,status,created_at,processed_at,result"
+        "&order=created_at.desc&limit=50"
+    )
+    counts = {
+        status: sum(row["status"] == status for row in command_rows)
+        for status in ("pending", "processing", "failed")
+    }
+    return {
+        "last_snapshot_at": (
+            snapshot_rows[0]["updated_at"] if snapshot_rows else None
+        ),
+        "version": snapshot_rows[0]["version"] if snapshot_rows else None,
+        "counts": counts,
+        "failures": [
+            row for row in command_rows if row["status"] == "failed"
+        ][:10],
+    }
+
+
+def daily_snapshot_list() -> list[dict[str, Any]]:
+    base_url = credential(
+        "COMMAND_CENTER_SUPABASE_URL",
+        "command-center-supabase-url",
+    ).rstrip("/")
+    service_key = credential(
+        "COMMAND_CENTER_SUPABASE_SERVICE_KEY",
+        "command-center-supabase-service",
+    )
+    user_id = credential(
+        "COMMAND_CENTER_SUPABASE_USER_ID",
+        "command-center-supabase-user",
+    )
+    request = urllib.request.Request(
+        f"{base_url}/rest/v1/command_center_daily_snapshots"
+        f"?user_id=eq.{urllib.parse.quote(user_id)}"
+        "&select=day,updated_at&order=day.desc&limit=365",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+            "Accept": "application/json",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=20) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def daily_snapshot_get(snapshot_date: str) -> dict[str, Any]:
+    validate_iso_date(snapshot_date)
+    base_url = credential(
+        "COMMAND_CENTER_SUPABASE_URL",
+        "command-center-supabase-url",
+    ).rstrip("/")
+    service_key = credential(
+        "COMMAND_CENTER_SUPABASE_SERVICE_KEY",
+        "command-center-supabase-service",
+    )
+    user_id = credential(
+        "COMMAND_CENTER_SUPABASE_USER_ID",
+        "command-center-supabase-user",
+    )
+    request = urllib.request.Request(
+        f"{base_url}/rest/v1/command_center_daily_snapshots"
+        f"?user_id=eq.{urllib.parse.quote(user_id)}"
+        f"&day=eq.{urllib.parse.quote(snapshot_date)}"
+        "&select=day,payload,updated_at",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+            "Accept": "application/json",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=20) as response:
+        rows = json.loads(response.read().decode("utf-8"))
+    if not rows:
+        raise CommandCenterError(f"No daily snapshot exists for {snapshot_date}.")
+    return rows[0]
 
 
 def http_json(url: str, token: str) -> Any:
@@ -3971,10 +4662,18 @@ def build_parser() -> argparse.ArgumentParser:
     task_complete = commands.add_parser("task-complete")
     task_complete.add_argument("--query", required=True)
     task_complete.add_argument("--date")
+    task_reopen = commands.add_parser("task-reopen")
+    task_reopen.add_argument("--query", required=True)
+    task_reopen.add_argument("--date", required=True)
 
     task_reschedule = commands.add_parser("task-reschedule")
     task_reschedule.add_argument("--query", required=True)
     task_reschedule.add_argument("--date", required=True)
+    task_update = commands.add_parser("task-update")
+    task_update.add_argument("--query", required=True)
+    task_update.add_argument("--current-date", required=True)
+    task_update.add_argument("--title", required=True)
+    task_update.add_argument("--date", required=True)
 
     commands.add_parser("project-list")
     project_status_parser = commands.add_parser("project-status")
@@ -4067,9 +4766,17 @@ def build_parser() -> argparse.ArgumentParser:
     work_task_complete = commands.add_parser("work-task-complete")
     work_task_complete.add_argument("--query", required=True)
     work_task_complete.add_argument("--date")
+    work_task_reopen = commands.add_parser("work-task-reopen")
+    work_task_reopen.add_argument("--query", required=True)
+    work_task_reopen.add_argument("--date", required=True)
     work_task_reschedule = commands.add_parser("work-task-reschedule")
     work_task_reschedule.add_argument("--query", required=True)
     work_task_reschedule.add_argument("--date", required=True)
+    work_task_update = commands.add_parser("work-task-update")
+    work_task_update.add_argument("--query", required=True)
+    work_task_update.add_argument("--current-date", required=True)
+    work_task_update.add_argument("--title", required=True)
+    work_task_update.add_argument("--date", required=True)
     work_append = commands.add_parser("work-append")
     work_append.add_argument(
         "--kind",
@@ -4100,6 +4807,11 @@ def build_parser() -> argparse.ArgumentParser:
     reminder_complete = commands.add_parser("reminder-complete")
     reminder_complete.add_argument("--list", default="Reminders")
     reminder_complete.add_argument("--id", required=True)
+    reminder_update = commands.add_parser("reminder-update")
+    reminder_update.add_argument("--list", default="Reminders")
+    reminder_update.add_argument("--id", required=True)
+    reminder_update.add_argument("--title", required=True)
+    reminder_update.add_argument("--date", required=True)
 
     mail = commands.add_parser("mail")
     mail.add_argument("--query")
@@ -4111,6 +4823,12 @@ def build_parser() -> argparse.ArgumentParser:
     scratchpad_set_parser = commands.add_parser("scratchpad-set")
     scratchpad_set_parser.add_argument("--content", required=True)
     commands.add_parser("scratchpad-clear")
+    audit_parser = commands.add_parser("audit-list")
+    audit_parser.add_argument("--limit", type=int, default=100)
+    commands.add_parser("sync-status")
+    commands.add_parser("snapshot-list")
+    snapshot_get = commands.add_parser("snapshot-get")
+    snapshot_get.add_argument("--date", required=True)
     render_logs_parser = commands.add_parser("render-logs")
     render_logs_parser.add_argument("--name", required=True)
     render_logs_parser.add_argument("--limit", type=int, default=30)
@@ -4153,8 +4871,20 @@ def main() -> None:
             )
         elif args.command == "task-complete":
             emit(complete_task(vault, args.query, args.date))
+        elif args.command == "task-reopen":
+            emit(reopen_task(vault, args.query, args.date))
         elif args.command == "task-reschedule":
             emit(reschedule_task(vault, args.query, args.date))
+        elif args.command == "task-update":
+            emit(
+                update_task(
+                    vault,
+                    args.query,
+                    args.current_date,
+                    args.title,
+                    args.date,
+                )
+            )
         elif args.command == "project-list":
             emit({"projects": [asdict(project) for project in load_projects(vault)]})
         elif args.command == "project-status":
@@ -4269,8 +4999,20 @@ def main() -> None:
             emit(add_work_task(vault, args.title, args.date))
         elif args.command == "work-task-complete":
             emit(complete_work_task(vault, args.query, args.date))
+        elif args.command == "work-task-reopen":
+            emit(reopen_work_task(vault, args.query, args.date))
         elif args.command == "work-task-reschedule":
             emit(reschedule_work_task(vault, args.query, args.date))
+        elif args.command == "work-task-update":
+            emit(
+                update_work_task(
+                    vault,
+                    args.query,
+                    args.current_date,
+                    args.title,
+                    args.date,
+                )
+            )
         elif args.command == "work-append":
             emit(append_work_note(vault, args.kind, args.text, args.date))
         elif args.command == "github":
@@ -4295,23 +5037,19 @@ def main() -> None:
         elif args.command == "reminder-list":
             emit({"reminders": list_reminders(vault, args.list)})
         elif args.command == "reminder-add":
-            if args.date:
-                validate_iso_date(args.date)
-            emit(
-                {
-                    "id": add_reminder_item(
-                        args.list,
-                        " ".join(args.title.split()),
-                        args.date,
-                    ),
-                    "title": " ".join(args.title.split()),
-                    "list": args.list,
-                    "date": args.date,
-                    "status": "open",
-                }
-            )
+            emit(create_reminder(args.list, args.title, args.date))
         elif args.command == "reminder-complete":
             emit(complete_reminder(vault, args.list, args.id))
+        elif args.command == "reminder-update":
+            emit(
+                update_reminder(
+                    vault,
+                    args.list,
+                    args.id,
+                    args.title,
+                    args.date,
+                )
+            )
         elif args.command == "mail":
             emit(
                 {
@@ -4332,6 +5070,14 @@ def main() -> None:
             emit(scratchpad_set(args.content))
         elif args.command == "scratchpad-clear":
             emit(scratchpad_clear())
+        elif args.command == "audit-list":
+            emit({"events": audit_list(args.limit)})
+        elif args.command == "sync-status":
+            emit(cloud_sync_status())
+        elif args.command == "snapshot-list":
+            emit({"snapshots": daily_snapshot_list()})
+        elif args.command == "snapshot-get":
+            emit(daily_snapshot_get(args.date))
         elif args.command == "render-logs":
             emit(
                 render_logs(

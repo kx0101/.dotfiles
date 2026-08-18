@@ -41,6 +41,8 @@ invokes providers directly.
 | Scratchpad | Supabase `command_center_scratchpad` |
 | Reminders/events | macOS Reminders/Calendar, linked by stored IDs |
 | Apple Health summary | Supabase `command_center_health_daily` |
+| Audit timeline | `~/Library/Application Support/Command Center/audit.jsonl` |
+| Daily history | Supabase `command_center_daily_snapshots` |
 
 `daily-rollover` creates date/month files and carries only incomplete,
 deduplicated items. Personal task add/complete/reschedule updates Tasks, daily
@@ -61,6 +63,14 @@ shared; do not create a second Vercel theme.
 
 The Scratchpad autosaves after 800 ms, is owner-only, and persists until Clear.
 It is not Inbox, project memory, or a Markdown note.
+
+The first dashboard open per browser/day shows a dismissible briefing modal.
+Closing it stores the date in browser local storage. The date navigator switches
+to owner-only historical snapshots; past dates are read-only.
+
+Task and Reminder rows support title/date editing. Local writes call CLI update
+commands directly; Vercel writes enter the allowlisted queue and use pending
+overlays so refresh does not revert optimistic UI state.
 
 ## Cloud synchronization
 
@@ -88,9 +98,14 @@ Allowlisted cloud writes:
 - add/complete reminders;
 - add/complete Learning;
 - create Calendar events.
+- update/reschedule Personal/Work tasks and Reminders.
 
 Pending/processing commands overlay the Vercel snapshot so a refresh does not
 temporarily revert checked UI state.
+
+The sync panel shows current snapshot time and pending/processing/failed counts.
+Successful mutations append audit events with `cli`, `local-web`, or `vercel`
+source labels. The approved audit tail is included in each snapshot.
 
 ## Supabase setup
 
@@ -101,6 +116,8 @@ Run SQL files in order:
 3. `cloud/supabase/mac-actions.sql`
 4. `cloud/supabase/owner-gate.sql`
 5. `cloud/supabase/scratchpad.sql`
+6. `cloud/supabase/reliability-actions.sql`
+7. `cloud/supabase/daily-snapshots.sql`
 
 Public browser configuration belongs in ignored `cloud/.env.local` and Vercel:
 
@@ -120,7 +137,8 @@ The service-role key never enters Vercel, source files, prompts, or browser code
 
 LaunchAgents:
 
-- `com.command-center.dashboard` — localhost web server;
+- `com.command-center.dashboard` — optional localhost web server; currently
+  disabled because Vercel is the primary interface;
 - `com.command-center.briefing-morning` — daily 08:30;
 - `com.command-center.briefing-weekly` — Monday 08:30;
 - `com.command-center.call-reminders` — checks every minute, alerts 15 minutes

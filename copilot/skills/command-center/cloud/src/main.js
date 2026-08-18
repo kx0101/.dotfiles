@@ -13,6 +13,18 @@ let learningKind = "book";
 let snapshotPayload = {};
 let pendingCommands = [];
 let scratchpadTimer = null;
+let selectedDate = localDate();
+let availableSnapshots = [];
+
+function localDate(value = new Date()) {
+  return new Date(value.getTime() - value.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 10);
+}
+
+function isHistorical() {
+  return selectedDate !== localDate();
+}
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -62,25 +74,42 @@ function renderTasks(selector, items, action) {
     const checkbox = element("input");
     checkbox.type = "checkbox";
     checkbox.checked = Boolean(item.completed);
-    checkbox.disabled = Boolean(item.completed);
-    if (!item.completed) {
+    checkbox.disabled = isHistorical();
+    if (!isHistorical()) {
       checkbox.addEventListener("change", async () => {
-        if (!checkbox.checked) return;
         checkbox.disabled = true;
         try {
-          await enqueue(action, {
+          const nextAction = checkbox.checked
+            ? action
+            : action === "complete-work-task"
+              ? "reopen-work-task"
+              : "reopen-personal-task";
+          await enqueue(nextAction, {
             title: item.title,
             date: item.task_date,
           });
-          setStatus("Η ολοκλήρωση περιμένει συγχρονισμό με το Mac.");
+          setStatus("Η αλλαγή περιμένει συγχρονισμό με το Mac.");
+          await refresh();
         } catch (error) {
-          checkbox.checked = false;
+          checkbox.checked = !checkbox.checked;
           checkbox.disabled = false;
           setStatus(`Αποτυχία: ${error.message}`);
         }
       });
     }
     row.append(checkbox, element("span", "", item.title));
+    if (!item.completed && !isHistorical()) {
+      const edit = element("button", "task-edit", "Επεξεργασία");
+      edit.type = "button";
+      edit.addEventListener("click", (event) => {
+        event.preventDefault();
+        openEdit(
+          action === "complete-work-task" ? "Work" : "Personal",
+          item,
+        );
+      });
+      row.append(edit);
+    }
     container.append(row);
   }
 }
@@ -162,6 +191,7 @@ function renderReminders(items) {
     const row = element("label", "reminder-row");
     const checkbox = element("input");
     checkbox.type = "checkbox";
+    checkbox.disabled = isHistorical();
     checkbox.checked = Boolean(item.completed);
     checkbox.disabled = Boolean(item.completed);
     if (item.completed) row.classList.add("completed");
@@ -183,6 +213,15 @@ function renderReminders(items) {
       element("span", "item-meta", reminderDue(item.due)),
     );
     row.append(checkbox, copy);
+    if (!isHistorical()) {
+      const edit = element("button", "reminder-edit", "Επεξεργασία");
+      edit.type = "button";
+      edit.addEventListener("click", (event) => {
+        event.preventDefault();
+        openEdit("Reminder", item);
+      });
+      row.append(edit);
+    }
     container.append(row);
   }
 }
@@ -216,19 +255,22 @@ function renderLearning(items) {
     } else {
       copy.append(element("strong", "", item.title));
     }
-    const remove = element("button", "learning-remove", "Αφαίρεση");
-    remove.type = "button";
-    remove.addEventListener("click", async () => {
-      remove.disabled = true;
-      try {
-        await enqueue("complete-learning", { id: item.id });
-        setStatus("Η αφαίρεση περιμένει συγχρονισμό με το Mac.");
-      } catch (error) {
-        remove.disabled = false;
-        setStatus(`Αποτυχία: ${error.message}`);
-      }
-    });
-    row.append(copy, remove);
+    row.append(copy);
+    if (!isHistorical()) {
+      const remove = element("button", "learning-remove", "Αφαίρεση");
+      remove.type = "button";
+      remove.addEventListener("click", async () => {
+        remove.disabled = true;
+        try {
+          await enqueue("complete-learning", { id: item.id });
+          setStatus("Η αφαίρεση περιμένει συγχρονισμό με το Mac.");
+        } catch (error) {
+          remove.disabled = false;
+          setStatus(`Αποτυχία: ${error.message}`);
+        }
+      });
+      row.append(remove);
+    }
     container.append(row);
   }
 }
@@ -526,35 +568,72 @@ function renderSnapshot(snapshot) {
     pendingCommands.some(
       (command) => command.action === action && predicate(command.payload),
     );
-  const personalTasks = (snapshotPayload.personal_tasks ?? []).map((item) => ({
+  const updatedTasks = (items, action) =>
+    items.flatMap((item) => {
+      const command = pendingCommands.find(
+        (entry) =>
+          entry.action === action &&
+          entry.payload.old_title === item.title &&
+          entry.payload.current_date === item.task_date,
+      );
+      if (!command) return [item];
+      if (command.payload.date !== item.task_date) return [];
+      return [{ ...item, title: command.payload.title }];
+    });
+  const personalTasks = updatedTasks(
+    snapshotPayload.personal_tasks ?? [],
+    "update-personal-task",
+  ).map((item) => ({
     ...item,
-    completed:
-      item.completed ||
-      pending(
-        "complete-personal-task",
-        (payload) =>
-          payload.title === item.title && payload.date === item.task_date,
-      ),
+    completed: pending(
+      "reopen-personal-task",
+      (payload) =>
+        payload.title === item.title && payload.date === item.task_date,
+    )
+      ? false
+      : item.completed ||
+        pending(
+          "complete-personal-task",
+          (payload) =>
+            payload.title === item.title && payload.date === item.task_date,
+        ),
   }));
-  const workTasks = (snapshotPayload.work_tasks ?? []).map((item) => ({
+  const workTasks = updatedTasks(
+    snapshotPayload.work_tasks ?? [],
+    "update-work-task",
+  ).map((item) => ({
     ...item,
-    completed:
-      item.completed ||
-      pending(
-        "complete-work-task",
-        (payload) =>
-          payload.title === item.title && payload.date === item.task_date,
-      ),
+    completed: pending(
+      "reopen-work-task",
+      (payload) =>
+        payload.title === item.title && payload.date === item.task_date,
+    )
+      ? false
+      : item.completed ||
+        pending(
+          "complete-work-task",
+          (payload) =>
+            payload.title === item.title && payload.date === item.task_date,
+        ),
   }));
-  const reminders = (snapshotPayload.reminders ?? []).map((item) => ({
-    ...item,
-    completed:
-      item.completed ||
-      pending(
-        "complete-reminder",
-        (payload) => payload.id === item.id,
-      ),
-  }));
+  const reminders = (snapshotPayload.reminders ?? []).map((item) => {
+    const update = pendingCommands.find(
+      (command) =>
+        command.action === "update-reminder" &&
+        command.payload.id === item.id,
+    );
+    return {
+      ...item,
+      title: update?.payload.title ?? item.title,
+      due: update?.payload.date ?? item.due,
+      completed:
+        item.completed ||
+        pending(
+          "complete-reminder",
+          (payload) => payload.id === item.id,
+        ),
+    };
+  });
   const learning = (snapshotPayload.learning ?? []).filter(
     (item) =>
       !pending(
@@ -579,6 +658,7 @@ function renderSnapshot(snapshot) {
   renderLearning(learning);
   renderProjects(snapshotPayload.projects ?? []);
   renderCalendars(snapshotPayload.calendars ?? []);
+  renderAudit(snapshotPayload.audit ?? []);
   setStatus(
     snapshot
       ? `Ενημερώθηκε ${new Date(snapshot.updated_at).toLocaleString("el-GR")}`
@@ -587,12 +667,29 @@ function renderSnapshot(snapshot) {
 }
 
 async function loadSnapshot() {
-  const { data, error } = await supabase
-    .from("command_center_snapshots")
-    .select("payload, updated_at")
-    .single();
+  const query = isHistorical()
+    ? supabase
+        .from("command_center_daily_snapshots")
+        .select("payload, updated_at")
+        .eq("day", selectedDate)
+        .maybeSingle()
+    : supabase
+        .from("command_center_snapshots")
+        .select("payload, updated_at")
+        .single();
+  const { data, error } = await query;
   if (error && error.code !== "PGRST116") throw error;
   return data;
+}
+
+async function loadAvailableSnapshots() {
+  const { data, error } = await supabase
+    .from("command_center_daily_snapshots")
+    .select("day")
+    .order("day", { ascending: false })
+    .limit(365);
+  if (error) throw error;
+  availableSnapshots = (data ?? []).map((row) => row.day);
 }
 
 async function loadPendingCommands() {
@@ -604,15 +701,100 @@ async function loadPendingCommands() {
   return data ?? [];
 }
 
-async function loadHealth() {
+function renderSyncStatus(payload) {
+  const summary = $("#sync-summary");
+  summary.replaceChildren();
+  for (const [label, value] of [
+    [
+      "Τελευταίο snapshot",
+      payload.last_snapshot_at
+        ? formatGreekDateTime(payload.last_snapshot_at)
+        : "Ποτέ",
+    ],
+    ["Σε αναμονή", String(payload.counts.pending)],
+    ["Εκτελούνται", String(payload.counts.processing)],
+    ["Απέτυχαν", String(payload.counts.failed)],
+  ]) {
+    const card = element("div", "sync-stat");
+    card.append(
+      element("span", "summary-label", label),
+      element("strong", "", value),
+    );
+    summary.append(card);
+  }
+  const failures = $("#sync-failures");
+  failures.replaceChildren();
+  for (const failure of payload.failures) {
+    failures.append(
+      element(
+        "div",
+        "list-item severity-critical",
+        `${failure.action}: ${failure.result?.error ?? "Άγνωστο σφάλμα"}`,
+      ),
+    );
+  }
+}
+
+async function loadSyncStatus(snapshot) {
   const { data, error } = await supabase
+    .from("command_center_commands")
+    .select("action,status,result,created_at")
+    .in("status", ["pending", "processing", "failed"])
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  const rows = data ?? [];
+  renderSyncStatus({
+    last_snapshot_at: snapshot?.updated_at ?? null,
+    counts: {
+      pending: rows.filter((row) => row.status === "pending").length,
+      processing: rows.filter((row) => row.status === "processing").length,
+      failed: rows.filter((row) => row.status === "failed").length,
+    },
+    failures: rows.filter((row) => row.status === "failed").slice(0, 10),
+  });
+}
+
+function renderAudit(events) {
+  const container = $("#audit-timeline");
+  container.replaceChildren();
+  if (!events.length) {
+    empty(container);
+    return;
+  }
+  const actions = {
+    added: "Προστέθηκε",
+    completed: "Ολοκληρώθηκε",
+    rescheduled: "Μετακινήθηκε",
+    updated: "Ενημερώθηκε",
+    recorded: "Καταγράφηκε",
+    reopened: "Επαναφέρθηκε",
+  };
+  for (const event of events) {
+    const row = element("div", "audit-row");
+    row.append(
+      element("span", "audit-time", formatGreekDateTime(event.timestamp)),
+      element("span", "audit-source", event.source),
+      element(
+        "span",
+        "audit-title",
+        `${actions[event.action] ?? event.action}: ${event.title}`,
+      ),
+    );
+    container.append(row);
+  }
+}
+
+async function loadHealth() {
+  let query = supabase
     .from("command_center_health_daily")
     .select(
       "day,steps,sleep_minutes,active_energy_kcal,resting_heart_rate,updated_at",
-    )
-    .order("day", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    );
+  query = isHistorical()
+    ? query.eq("day", selectedDate).maybeSingle()
+    : query.order("day", { ascending: false }).limit(1).maybeSingle();
+  const { data, error } = await query;
   renderHealth(error ? null : data);
 }
 
@@ -651,6 +833,7 @@ async function saveScratchpad() {
 }
 
 function scheduleScratchpadSave() {
+  if (isHistorical()) return;
   clearTimeout(scratchpadTimer);
   $("#scratchpad-status").textContent = "Μη αποθηκευμένες αλλαγές";
   scratchpadTimer = setTimeout(() => {
@@ -661,6 +844,7 @@ function scheduleScratchpadSave() {
 }
 
 async function clearScratchpad() {
+  if (isHistorical()) return;
   if (!window.confirm("Να καθαριστεί ολόκληρο το σημειωματάριο;")) return;
   clearTimeout(scratchpadTimer);
   const { error } = await supabase
@@ -672,11 +856,60 @@ async function clearScratchpad() {
 }
 
 async function enqueue(action, payload) {
+  if (isHistorical()) {
+    throw new Error("Οι παλιές ημερομηνίες είναι μόνο για ανάγνωση.");
+  }
   const { error } = await supabase
     .from("command_center_commands")
     .insert({ action, payload });
   if (error) throw error;
   setTimeout(refresh, 65_000);
+}
+
+function openEdit(kind, item) {
+  $("#edit-kind").value = kind;
+  $("#edit-id").value = item.id ?? "";
+  $("#edit-old-title").value = item.title;
+  $("#edit-current-date").value =
+    item.task_date ?? item.due?.slice(0, 10) ?? "";
+  $("#edit-title").value = item.title;
+  $("#edit-date").value =
+    item.task_date ??
+    item.due?.slice(0, 10) ??
+    new Date().toISOString().slice(0, 10);
+  const dialog = $("#edit-dialog");
+  if (!dialog.open) dialog.showModal();
+  $("#edit-title").focus();
+}
+
+async function saveEdit(event) {
+  event.preventDefault();
+  const button = event.submitter ?? $("#edit-form button[type='submit']");
+  button.disabled = true;
+  const kind = $("#edit-kind").value;
+  const payload = {
+    id: $("#edit-id").value,
+    old_title: $("#edit-old-title").value,
+    current_date: $("#edit-current-date").value,
+    title: $("#edit-title").value.trim(),
+    date: $("#edit-date").value,
+  };
+  const action =
+    kind === "Reminder"
+      ? "update-reminder"
+      : kind === "Work"
+        ? "update-work-task"
+        : "update-personal-task";
+  try {
+    await enqueue(action, payload);
+    $("#edit-dialog").close();
+    setStatus("Η ενημέρωση περιμένει συγχρονισμό με το Mac.");
+    await refresh();
+  } catch (error) {
+    setStatus(`Αποτυχία επεξεργασίας: ${error.message}`);
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function updateCaptureFields() {
@@ -688,6 +921,7 @@ function updateCaptureFields() {
 
 async function capture(event) {
   event.preventDefault();
+  if (isHistorical()) return;
   const button = event.submitter ?? $("#capture-form button[type='submit']");
   button.disabled = true;
   const kind = $("#capture-kind").value;
@@ -722,6 +956,7 @@ async function capture(event) {
 
 async function addCalendarEvent(event) {
   event.preventDefault();
+  if (isHistorical()) return;
   const button = event.submitter ?? $("#event-form button[type='submit']");
   button.disabled = true;
   const title = $("#event-title").value.trim();
@@ -821,17 +1056,85 @@ function applyVisibility() {
   $("#work-panel").classList.toggle("hidden", !$("#show-work").checked);
 }
 
+function briefingSection(title, items) {
+  const section = element("section", "briefing-section");
+  section.append(element("h3", "", title));
+  const list = element("div", "briefing-items");
+  if (!items.length) {
+    list.append(element("div", "briefing-item empty", "Κανένα."));
+  } else {
+    for (const item of items.slice(0, 20)) {
+      const title = typeof item === "string" ? item : item.title;
+      const depth =
+        typeof item === "string" ? 0 : Math.min(item.parent_path?.length ?? 0, 8);
+      const row = element("div", "briefing-item", title);
+      row.classList.add(`briefing-depth-${depth}`);
+      list.append(row);
+    }
+  }
+  section.append(list);
+  return section;
+}
+
+function maybeShowBriefing() {
+  if (isHistorical()) return;
+  const day = localDate();
+  if (localStorage.getItem("command-center-briefing-date") === day) return;
+  const content = $("#briefing-content");
+  content.replaceChildren(
+    briefingSection(
+      "Πρόγραμμα",
+      (snapshotPayload.agenda ?? []).map(
+        (item) => `${formatTime(item.start)} · ${item.title}`,
+      ),
+    ),
+    briefingSection(
+      "Δουλειά",
+      (snapshotPayload.work_tasks ?? [])
+        .filter((item) => !item.completed),
+    ),
+    briefingSection(
+      "Προσωπικά",
+      (snapshotPayload.personal_tasks ?? [])
+        .filter((item) => !item.completed),
+    ),
+    briefingSection(
+      "Υπενθυμίσεις",
+      (snapshotPayload.reminders ?? []).map((item) => item.title),
+    ),
+  );
+  const dialog = $("#briefing-dialog");
+  if (!dialog.open) dialog.showModal();
+}
+
 async function refresh() {
   if (!session) return;
   setStatus("Ανανέωση…");
   const [snapshot, commands] = await Promise.all([
     loadSnapshot(),
-    loadPendingCommands(),
+    isHistorical() ? Promise.resolve([]) : loadPendingCommands(),
     loadHealth(),
-    loadScratchpad(),
+    isHistorical() ? Promise.resolve() : loadScratchpad(),
   ]);
   pendingCommands = commands;
   renderSnapshot(snapshot);
+  if (isHistorical()) {
+    renderScratchpad(snapshot?.payload?.scratchpad ?? null);
+    $("#scratchpad").readOnly = true;
+    document.body.classList.add("history-mode");
+    $("#history-mode").textContent = `Snapshot ${selectedDate}`;
+    setStatus(
+      snapshot
+        ? `Ιστορικό snapshot ${selectedDate}`
+        : `Δεν υπάρχει snapshot για ${selectedDate}`,
+    );
+  } else {
+    $("#scratchpad").readOnly = false;
+    document.body.classList.remove("history-mode");
+    $("#history-mode").textContent = "Ζωντανή προβολή";
+  }
+  await loadSyncStatus(snapshot);
+  maybeShowBriefing();
 }
 
 async function updateAuth(nextSession) {
@@ -847,10 +1150,24 @@ async function updateAuth(nextSession) {
   $("#app").classList.toggle("hidden", !session);
   $("#capture-form").classList.toggle("hidden", !session);
   if (session) {
+    await loadAvailableSnapshots();
+    $("#history-date").value = selectedDate;
     await refresh();
   } else {
     showLogin();
   }
+}
+
+async function selectHistoryDate(value) {
+  selectedDate = value;
+  $("#history-date").value = value;
+  await refresh();
+}
+
+function shiftHistoryDate(days) {
+  const date = new Date(`${selectedDate}T12:00:00`);
+  date.setDate(date.getDate() + days);
+  selectHistoryDate(localDate(date));
 }
 
 function initializeDate() {
@@ -867,6 +1184,7 @@ function initializeDate() {
   )
     .toISOString()
     .slice(0, 10);
+  $("#history-date").value = selectedDate;
   const nextHour = new Date(now);
   nextHour.setMinutes(0, 0, 0);
   nextHour.setHours(nextHour.getHours() + 1);
@@ -916,6 +1234,29 @@ async function initialize() {
     $("#event-title").focus();
   });
   $("#event-form").addEventListener("submit", addCalendarEvent);
+  $("#edit-form").addEventListener("submit", saveEdit);
+  $("#close-edit").addEventListener("click", () => {
+    $("#edit-dialog").close();
+  });
+  $("#close-briefing").addEventListener("click", () => {
+    localStorage.setItem(
+      "command-center-briefing-date",
+      localDate(),
+    );
+    $("#briefing-dialog").close();
+  });
+  $("#history-date").addEventListener("change", (event) => {
+    selectHistoryDate(event.target.value);
+  });
+  $("#history-previous").addEventListener("click", () => {
+    shiftHistoryDate(-1);
+  });
+  $("#history-next").addEventListener("click", () => {
+    shiftHistoryDate(1);
+  });
+  $("#history-today").addEventListener("click", () => {
+    selectHistoryDate(localDate());
+  });
   document.querySelectorAll(".learning-tab").forEach((tab) => {
     tab.addEventListener("click", () => {
       learningKind = tab.dataset.kind;

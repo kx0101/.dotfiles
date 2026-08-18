@@ -31,6 +31,14 @@
 
       <section id="status" class="status">Φόρτωση Command Center…</section>
 
+      <nav class="history-toolbar" aria-label="Ημερήσιο αρχείο">
+        <button id="history-previous" type="button">←</button>
+        <input id="history-date" type="date" aria-label="Ημερομηνία snapshot">
+        <button id="history-next" type="button">→</button>
+        <button id="history-today" type="button">Σήμερα</button>
+        <span id="history-mode" class="item-meta">Ζωντανή προβολή</span>
+      </nav>
+
       <form id="capture-form" class="capture-bar hidden">
           <input
             id="capture-title"
@@ -88,6 +96,17 @@
                 maxlength="20000"
                 placeholder="Γράψε κάτι που θέλεις να μείνει εδώ…"
               ></textarea>
+            </section>
+
+            <section class="panel span-2">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">ΣΥΓΧΡΟΝΙΣΜΟΣ</p>
+                  <h2>Κατάσταση Mac ↔ Vercel</h2>
+                </div>
+              </div>
+              <div id="sync-summary" class="sync-grid"></div>
+              <div id="sync-failures" class="list"></div>
             </section>
 
             <section class="panel span-2">
@@ -185,6 +204,16 @@
               </div>
               <div id="apple-health" class="health-metrics"></div>
             </section>
+
+            <section class="panel span-2">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">ΙΣΤΟΡΙΚΟ</p>
+                  <h2>Πρόσφατη δραστηριότητα</h2>
+                </div>
+              </div>
+              <div id="audit-timeline" class="audit-timeline"></div>
+            </section>
           </div>
       </section>
 
@@ -247,6 +276,42 @@
           </label>
           <button type="submit">Δημιουργία συμβάντος</button>
         </form>
+      </dialog>
+
+      <dialog id="edit-dialog" class="event-dialog">
+        <div class="dialog-header">
+          <div>
+            <p class="eyebrow">ΕΠΕΞΕΡΓΑΣΙΑ</p>
+            <h2>Τίτλος και ημερομηνία</h2>
+          </div>
+          <button id="close-edit" type="button">Κλείσιμο</button>
+        </div>
+        <form id="edit-form" class="event-form">
+          <input id="edit-kind" type="hidden">
+          <input id="edit-id" type="hidden">
+          <input id="edit-old-title" type="hidden">
+          <input id="edit-current-date" type="hidden">
+          <label>
+            Τίτλος
+            <input id="edit-title" type="text" maxlength="300" required>
+          </label>
+          <label>
+            Ημερομηνία
+            <input id="edit-date" type="date" required>
+          </label>
+          <button type="submit">Αποθήκευση</button>
+        </form>
+      </dialog>
+
+      <dialog id="briefing-dialog" class="briefing-dialog">
+        <div class="dialog-header">
+          <div>
+            <p class="eyebrow">ΠΡΩΤΟ ΑΝΟΙΓΜΑ</p>
+            <h2>Σύνοψη ημέρας</h2>
+          </div>
+          <button id="close-briefing" type="button">Το είδα</button>
+        </div>
+        <div id="briefing-content" class="briefing-content"></div>
       </dialog>
     </main>
     <section id="access-denied" class="access-denied hidden">

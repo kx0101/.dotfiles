@@ -39,9 +39,17 @@ python3 scripts/command_center.py reminder-add \
   --title "Να ελέγξω τα τιμολόγια" \
   --date 2026-08-19
 python3 scripts/command_center.py reminder-complete --id "x-apple-reminder://..."
+python3 scripts/command_center.py reminder-update \
+  --id "x-apple-reminder://..." \
+  --title "Να ελέγξω τα τιμολόγια" \
+  --date 2026-08-20
 python3 scripts/command_center.py scratchpad-get
 python3 scripts/command_center.py scratchpad-set --content "Σημείωση"
 python3 scripts/command_center.py scratchpad-clear
+python3 scripts/command_center.py sync-status
+python3 scripts/command_center.py audit-list --limit 100
+python3 scripts/command_center.py snapshot-list
+python3 scripts/command_center.py snapshot-get --date 2026-08-18
 python3 scripts/command_center.py mail
 python3 scripts/command_center.py mail --query "invoice"
 python3 scripts/command_center.py mail \
@@ -127,6 +135,12 @@ python3 scripts/command_center.py task-complete \
 python3 scripts/command_center.py task-reschedule \
   --query "checkout" \
   --date 2026-08-21
+
+python3 scripts/command_center.py task-update \
+  --query "checkout" \
+  --current-date 2026-08-21 \
+  --title "Να ελέγξω το checkout" \
+  --date 2026-08-22
 ```
 
 Use either `--project` or `--area`, not both. Valid areas are `Personal` and
@@ -208,6 +222,11 @@ python3 scripts/command_center.py work-task-complete \
 python3 scripts/command_center.py work-task-reschedule \
   --query "ελέγξω το PR" \
   --date 2026-08-20
+python3 scripts/command_center.py work-task-update \
+  --query "ελέγξω το PR" \
+  --current-date 2026-08-20 \
+  --title "Να ολοκληρώσω το PR review" \
+  --date 2026-08-21
 
 python3 scripts/command_center.py work-append \
   --kind brag \

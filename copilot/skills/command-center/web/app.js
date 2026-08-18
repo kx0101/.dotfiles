@@ -142,15 +142,26 @@ function renderTaskTree(selector, items, area) {
     const checkbox = element("input");
     checkbox.type = "checkbox";
     checkbox.checked = item.completed;
-    checkbox.disabled = item.completed;
-    if (!item.completed) {
-      checkbox.addEventListener("change", () => {
-        if (checkbox.checked) completeTask(area, item, checkbox, row);
-      });
-    } else {
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) {
+        completeTask(area, item, checkbox, row);
+      } else {
+        reopenTask(area, item, checkbox, row);
+      }
+    });
+    if (item.completed) {
       row.classList.add("completed");
     }
     row.append(checkbox, element("span", "", item.title));
+    if (!item.completed) {
+      const edit = element("button", "task-edit", "Επεξεργασία");
+      edit.type = "button";
+      edit.addEventListener("click", (event) => {
+        event.preventDefault();
+        openEdit(area, item);
+      });
+      row.append(edit);
+    }
     const depth = Math.min(item.parent_path?.length ?? 0, 8);
     row.classList.add(`task-depth-${depth}`);
     container.append(row);
@@ -224,6 +235,70 @@ function renderAppleHealth(rows) {
   }
 }
 
+function renderSyncStatus(payload) {
+  const summary = $("#sync-summary");
+  summary.replaceChildren();
+  for (const [label, value] of [
+    [
+      "Τελευταίο snapshot",
+      payload.last_snapshot_at
+        ? formatGreekDateTime(payload.last_snapshot_at)
+        : "Ποτέ",
+    ],
+    ["Σε αναμονή", String(payload.counts?.pending ?? 0)],
+    ["Εκτελούνται", String(payload.counts?.processing ?? 0)],
+    ["Απέτυχαν", String(payload.counts?.failed ?? 0)],
+  ]) {
+    const card = element("div", "sync-stat");
+    card.append(
+      element("span", "summary-label", label),
+      element("strong", "", value),
+    );
+    summary.append(card);
+  }
+  const failures = $("#sync-failures");
+  failures.replaceChildren();
+  for (const failure of payload.failures ?? []) {
+    failures.append(
+      element(
+        "div",
+        "list-item severity-critical",
+        `${failure.action}: ${failure.result?.error ?? "Άγνωστο σφάλμα"}`,
+      ),
+    );
+  }
+}
+
+function renderAudit(events) {
+  const container = $("#audit-timeline");
+  container.replaceChildren();
+  if (!events.length) {
+    empty(container);
+    return;
+  }
+  const actions = {
+    added: "Προστέθηκε",
+    completed: "Ολοκληρώθηκε",
+    rescheduled: "Μετακινήθηκε",
+    updated: "Ενημερώθηκε",
+    recorded: "Καταγράφηκε",
+    reopened: "Επαναφέρθηκε",
+  };
+  for (const event of events) {
+    const row = element("div", "audit-row");
+    row.append(
+      element("span", "audit-time", formatGreekDateTime(event.timestamp)),
+      element("span", "audit-source", event.source),
+      element(
+        "span",
+        "audit-title",
+        `${actions[event.action] ?? event.action}: ${event.title}`,
+      ),
+    );
+    container.append(row);
+  }
+}
+
 function reminderDue(value) {
   if (!value) return "Χωρίς ημερομηνία";
   const parsed = new Date(value);
@@ -252,13 +327,20 @@ function renderReminders(reminders) {
       element(
         "span",
         "item-meta",
-        `${reminderDue(reminder.due)}${reminder.managed_task ? " · Task sync" : ""}`,
+        `${reminderDue(reminder.due)}${reminder.managed_task ? " · Συγχρονισμένη εργασία" : ""}`,
       ),
     );
     checkbox.addEventListener("change", () => {
       if (checkbox.checked) completeReminder(reminder, checkbox, row);
     });
     row.append(checkbox, copy);
+    const edit = element("button", "reminder-edit", "Επεξεργασία");
+    edit.type = "button";
+    edit.addEventListener("click", (event) => {
+      event.preventDefault();
+      openEdit("Reminder", reminder);
+    });
+    row.append(edit);
     container.append(row);
   }
 }
@@ -664,6 +746,52 @@ async function mutate(path, payload) {
   return result;
 }
 
+function openEdit(kind, item) {
+  $("#edit-kind").value = kind;
+  $("#edit-id").value = item.id ?? "";
+  $("#edit-old-title").value = item.title;
+  $("#edit-current-date").value =
+    item.task_date ?? item.due?.slice(0, 10) ?? "";
+  $("#edit-title").value = item.title;
+  $("#edit-date").value =
+    item.task_date ??
+    item.due?.slice(0, 10) ??
+    new Date().toISOString().slice(0, 10);
+  const dialog = $("#edit-dialog");
+  if (!dialog.open) dialog.showModal();
+  $("#edit-title").focus();
+}
+
+async function saveEdit(event) {
+  event.preventDefault();
+  const button = event.submitter ?? $("#edit-form button[type='submit']");
+  button.disabled = true;
+  const kind = $("#edit-kind").value;
+  const payload = {
+    id: $("#edit-id").value,
+    old_title: $("#edit-old-title").value,
+    current_date: $("#edit-current-date").value,
+    title: $("#edit-title").value.trim(),
+    date: $("#edit-date").value,
+    area: kind,
+  };
+  try {
+    if (kind === "Reminder") {
+      await mutate("/api/reminder/update", payload);
+      await refreshReminders();
+    } else {
+      await mutate("/api/task/update", payload);
+      await refreshTasks();
+    }
+    $("#edit-dialog").close();
+    setStatus(`Ενημερώθηκε: ${payload.title}`);
+  } catch (error) {
+    setStatus(`Αποτυχία επεξεργασίας: ${error.message}`, true);
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function refreshTasks() {
   const payload = await fetchJSON("/api/tasks");
   state.tasks = payload;
@@ -755,6 +883,26 @@ async function completeTask(area, item, checkbox, row) {
     checkbox.disabled = false;
     row.classList.remove("pending");
     setStatus(`Αποτυχία ολοκλήρωσης: ${error.message}`, true);
+  }
+}
+
+async function reopenTask(area, item, checkbox, row) {
+  checkbox.disabled = true;
+  row.classList.add("pending");
+  setStatus(`Επαναφορά: ${item.title}…`);
+  try {
+    await mutate("/api/task/reopen", {
+      title: item.title,
+      area,
+      date: item.task_date,
+    });
+    await refreshTasks();
+    setStatus(`Επαναφέρθηκε: ${item.title}`);
+  } catch (error) {
+    checkbox.checked = true;
+    checkbox.disabled = false;
+    row.classList.remove("pending");
+    setStatus(`Αποτυχία επαναφοράς: ${error.message}`, true);
   }
 }
 
@@ -860,6 +1008,70 @@ async function addCalendarEvent(event) {
   }
 }
 
+async function loadSyncStatus() {
+  renderSyncStatus(await fetchJSON("/api/sync-status"));
+}
+
+async function loadAudit() {
+  const payload = await fetchJSON("/api/audit");
+  renderAudit(payload.events ?? []);
+}
+
+function briefingSection(title, items) {
+  const section = element("section", "briefing-section");
+  section.append(element("h3", "", title));
+  const list = element("div", "briefing-items");
+  if (!items.length) {
+    list.append(element("div", "briefing-item empty", "Κανένα."));
+  } else {
+    for (const item of items.slice(0, 20)) {
+      const title = typeof item === "string" ? item : item.title;
+      const depth =
+        typeof item === "string" ? 0 : Math.min(item.parent_path?.length ?? 0, 8);
+      const row = element("div", "briefing-item", title);
+      row.classList.add(`briefing-depth-${depth}`);
+      list.append(row);
+    }
+  }
+  section.append(list);
+  return section;
+}
+
+function maybeShowBriefing() {
+  const now = new Date();
+  const day = new Date(
+    now.getTime() - now.getTimezoneOffset() * 60_000,
+  )
+    .toISOString()
+    .slice(0, 10);
+  if (localStorage.getItem("command-center-briefing-date") === day) return;
+  const content = $("#briefing-content");
+  content.replaceChildren(
+    briefingSection(
+      "Πρόγραμμα",
+      (state.agenda?.events ?? []).map(
+        (item) => `${formatTime(item.start)} · ${item.title}`,
+      ),
+    ),
+    briefingSection(
+      "Δουλειά",
+      (state.tasks?.work ?? [])
+        .filter((item) => !item.completed),
+    ),
+    briefingSection(
+      "Προσωπικά",
+      (state.tasks?.personal ?? [])
+        .filter((item) => !item.completed),
+    ),
+    briefingSection(
+      "Υπενθυμίσεις",
+      (state.reminders?.reminders ?? []).map((item) => item.title),
+    ),
+  );
+  const dialog = $("#briefing-dialog");
+  if (!dialog.open) dialog.showModal();
+}
+
 async function refresh() {
   setStatus("Φόρτωση ζωντανών δεδομένων…");
   $("#refresh").disabled = true;
@@ -889,6 +1101,8 @@ async function refresh() {
     refreshLearning(),
     refreshReminders(),
     loadScratchpad(),
+    loadSyncStatus(),
+    loadAudit(),
   ];
   const results = await Promise.allSettled(requests);
   const failures = results.filter((result) => result.status === "rejected");
@@ -902,6 +1116,7 @@ async function refresh() {
     failures.length > 0,
   );
   $("#refresh").disabled = false;
+  maybeShowBriefing();
 }
 
 function initialize() {
@@ -950,6 +1165,21 @@ function initialize() {
     }
   });
   $("#capture-form").addEventListener("submit", addCapture);
+  $("#edit-form").addEventListener("submit", saveEdit);
+  $("#close-edit").addEventListener("click", () => {
+    $("#edit-dialog").close();
+  });
+  $("#close-briefing").addEventListener("click", () => {
+    localStorage.setItem(
+      "command-center-briefing-date",
+      new Date(
+        Date.now() - new Date().getTimezoneOffset() * 60_000,
+      )
+        .toISOString()
+        .slice(0, 10),
+    );
+    $("#briefing-dialog").close();
+  });
   $("#scratchpad").addEventListener("input", scheduleScratchpadSave);
   $("#clear-scratchpad").addEventListener("click", clearScratchpad);
   $("#capture-kind").addEventListener("change", updateCaptureFields);
