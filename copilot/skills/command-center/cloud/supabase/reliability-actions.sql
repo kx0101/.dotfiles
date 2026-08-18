@@ -10,6 +10,8 @@ alter table public.command_center_commands
       'add-learning',
       'add-calendar-event',
       'add-project-note',
+      'archive-project-note',
+      'delete-agenda-item',
       'complete-personal-task',
       'complete-work-task',
       'complete-reminder',

@@ -92,9 +92,13 @@ Allowlisted mutations are executed locally through the CLI. Apple Health uses a
 separate owner-only table and restricted ingest token.
 Vercel project-note capture must use `project-record`; project history remains
 append-only. Project modals show project notes only.
+UI deletion archives a project note through `project-record-archive`; it does
+not erase the underlying append-only record.
 
 Keep completed Agenda items visible with strikethrough. A Reminder is complete
 from its macOS completion state; a timed call is complete after its end time.
+Deleting a linked Agenda todo closes its task as `διαγράφηκε` and retains
+Markdown/audit history.
 
 Show the briefing modal only on the first browser open of each day. Surface sync
 status and the append-only audit timeline. Daily history uses owner-only Supabase

@@ -78,10 +78,14 @@ selection creates a new root parent. Personal task storage remains flat in
 forward. Vercel project-note capture routes to append-only `project-record`.
 Project modals display only `kind=note` records, not summaries or the full record
 stream.
+Deleting a project note appends an `archive` tombstone that supersedes the note;
+physical project history remains intact.
 
 Agenda rows are marked complete when a due-today Reminder is completed, a Work
 Calendar todo title begins with `✓`, or a timed event has ended. Completed rows
 remain visible with strikethrough.
+Agenda deletion removes the Calendar/Reminder item. A linked task is closed as
+`διαγράφηκε` in Markdown and retained in audit/history.
 
 ## Cloud synchronization
 

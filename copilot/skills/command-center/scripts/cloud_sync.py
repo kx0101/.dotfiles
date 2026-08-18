@@ -284,6 +284,32 @@ def command_arguments(command: dict[str, Any]) -> tuple[str, ...]:
             "--source",
             "Command Center Vercel",
         )
+    if action == "archive-project-note":
+        return (
+            "project-record-archive",
+            "--name",
+            str(payload.get("project") or ""),
+            "--id",
+            str(payload.get("id") or ""),
+            "--source",
+            "Command Center Vercel",
+        )
+    if action == "delete-agenda-item":
+        arguments = [
+            "agenda-delete",
+            "--kind",
+            str(payload.get("kind") or ""),
+            "--calendar",
+            str(payload.get("calendar") or ""),
+            "--uid",
+            str(payload.get("uid") or ""),
+            "--title",
+            title,
+        ]
+        command_ref = str(payload.get("ref") or "")
+        if command_ref:
+            arguments.extend(["--ref", command_ref])
+        return tuple(arguments)
     if action == "complete-personal-task":
         return (
             "task-complete",

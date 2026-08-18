@@ -128,6 +128,12 @@ function renderAgenda(events) {
       anchor.rel = "noreferrer";
       row.append(anchor);
     }
+    if (event.uid) {
+      const remove = element("button", "agenda-delete", "Διαγραφή");
+      remove.type = "button";
+      remove.addEventListener("click", () => deleteAgendaItem(event, remove));
+      row.append(remove);
+    }
     container.append(row);
   }
 }
@@ -290,6 +296,7 @@ function renderAudit(events) {
     updated: "Ενημερώθηκε",
     recorded: "Καταγράφηκε",
     reopened: "Επαναφέρθηκε",
+    deleted: "Διαγράφηκε",
   };
   for (const event of events) {
     const row = element("div", "audit-row");
@@ -570,6 +577,12 @@ function renderProjectDetail(payload) {
           `${formatGreekDateTime(note.timestamp)} · ${note.source}`,
         ),
       );
+      const remove = element("button", "note-delete", "Διαγραφή");
+      remove.type = "button";
+      remove.addEventListener("click", () => {
+        archiveProjectNote(project.name, note.id, remove);
+      });
+      card.append(remove);
       notes.append(card);
     }
   } else {
@@ -1070,6 +1083,42 @@ async function addCalendarEvent(event) {
     setStatus(`Αποτυχία συμβάντος: ${error.message}`, true);
   } finally {
     button.disabled = false;
+  }
+}
+
+async function deleteAgendaItem(item, button) {
+  if (!window.confirm(`Να διαγραφεί το «${item.title}» από το Πρόγραμμα;`)) {
+    return;
+  }
+  button.disabled = true;
+  try {
+    await mutate("/api/agenda/delete", {
+      kind: item.kind === "reminder" ? "reminder" : "event",
+      calendar: item.calendar,
+      uid: item.uid,
+      title: item.title,
+      ref: item.command_center_ref,
+    });
+    await refreshAgenda();
+    setStatus(`Διαγράφηκε: ${item.title}`);
+  } catch (error) {
+    button.disabled = false;
+    setStatus(`Αποτυχία διαγραφής: ${error.message}`, true);
+  }
+}
+
+async function archiveProjectNote(project, id, button) {
+  if (!window.confirm("Να διαγραφεί αυτή η σημείωση έργου;")) return;
+  button.disabled = true;
+  try {
+    await mutate("/api/project/note/archive", { project, id });
+    renderProjectDetail(
+      await fetchJSON(`/api/project?name=${encodeURIComponent(project)}`),
+    );
+    setStatus("Η σημείωση έργου διαγράφηκε.");
+  } catch (error) {
+    button.disabled = false;
+    setStatus(`Αποτυχία διαγραφής: ${error.message}`, true);
   }
 }
 

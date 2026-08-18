@@ -172,6 +172,12 @@ function renderAgenda(events) {
       anchor.rel = "noreferrer";
       row.append(anchor);
     }
+    if (event.uid && !isHistorical()) {
+      const remove = element("button", "agenda-delete", "Διαγραφή");
+      remove.type = "button";
+      remove.addEventListener("click", () => deleteAgendaItem(event, remove));
+      row.append(remove);
+    }
     container.append(row);
   }
 }
@@ -409,8 +415,17 @@ function openProject(project) {
   detail.append(detailSection("Εργασίες", tasks));
 
   const notes = element("div", "list");
-  if (project.notes?.length) {
-    for (const note of project.notes) {
+  const projectNotes = (project.notes ?? []).filter(
+    (note) =>
+      !pendingCommands.some(
+        (command) =>
+          command.action === "archive-project-note" &&
+          command.payload.project === project.name &&
+          command.payload.id === note.id,
+      ),
+  );
+  if (projectNotes.length) {
+    for (const note of projectNotes) {
       const card = element("article", "list-item");
       card.append(
         element("p", "", note.text),
@@ -420,6 +435,14 @@ function openProject(project) {
           `${formatGreekDateTime(note.timestamp)} · ${note.source}`,
         ),
       );
+      if (!isHistorical()) {
+        const remove = element("button", "note-delete", "Διαγραφή");
+        remove.type = "button";
+        remove.addEventListener("click", () => {
+          archiveProjectNote(project, note, remove);
+        });
+        card.append(remove);
+      }
       notes.append(card);
     }
   } else {
@@ -705,7 +728,15 @@ function renderSnapshot(snapshot) {
         (payload) => payload.id === item.id,
       ),
   );
-  renderAgenda(snapshotPayload.agenda ?? []);
+  const agenda = (snapshotPayload.agenda ?? []).filter(
+    (item) =>
+      !pending(
+        "delete-agenda-item",
+        (payload) =>
+          payload.uid === item.uid && payload.calendar === item.calendar,
+      ),
+  );
+  renderAgenda(agenda);
   renderTasks(
     "#work-tree",
     workTasks,
@@ -834,6 +865,7 @@ function renderAudit(events) {
     updated: "Ενημερώθηκε",
     recorded: "Καταγράφηκε",
     reopened: "Επαναφέρθηκε",
+    deleted: "Διαγράφηκε",
   };
   for (const event of events) {
     const row = element("div", "audit-row");
@@ -1052,6 +1084,45 @@ async function addCalendarEvent(event) {
     setStatus(`Αποτυχία: ${error.message}`);
   } finally {
     button.disabled = false;
+  }
+}
+
+async function deleteAgendaItem(item, button) {
+  if (!window.confirm(`Να διαγραφεί το «${item.title}» από το Πρόγραμμα;`)) {
+    return;
+  }
+  button.disabled = true;
+  try {
+    await enqueue("delete-agenda-item", {
+      kind: item.kind === "reminder" ? "reminder" : "event",
+      calendar: item.calendar,
+      uid: item.uid,
+      title: item.title,
+      ref: item.command_center_ref,
+    });
+    setStatus("Η διαγραφή περιμένει συγχρονισμό με το Mac.");
+    await refresh();
+  } catch (error) {
+    button.disabled = false;
+    setStatus(`Αποτυχία διαγραφής: ${error.message}`);
+  }
+}
+
+async function archiveProjectNote(project, note, button) {
+  if (!window.confirm("Να διαγραφεί αυτή η σημείωση έργου;")) return;
+  button.disabled = true;
+  try {
+    await enqueue("archive-project-note", {
+      project: project.name,
+      id: note.id,
+      title: note.text,
+    });
+    setStatus("Η διαγραφή περιμένει συγχρονισμό με το Mac.");
+    await refresh();
+    openProject(project);
+  } catch (error) {
+    button.disabled = false;
+    setStatus(`Αποτυχία διαγραφής: ${error.message}`);
   }
 }
 

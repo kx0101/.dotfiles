@@ -82,6 +82,7 @@ RECORD_KIND_LABELS = {
     "decision": "Απόφαση",
     "note": "Σημείωση",
     "summary": "Ενημέρωση σύνοψης",
+    "archive": "Αρχειοθέτηση",
 }
 RECORD_LABEL_KINDS = {label: kind for kind, label in RECORD_KIND_LABELS.items()}
 LEARNING_KINDS = {
@@ -1535,6 +1536,46 @@ def record_project(
     return record
 
 
+def archive_project_record(
+    vault: Path,
+    name: str,
+    record_id: str,
+    source: str,
+) -> dict[str, Any]:
+    note = project_note(vault, name)
+    with path_lock(note):
+        records = project_records(note)
+        matches = [
+            record
+            for record in records
+            if record.id == record_id and record.kind == "note" and record.active
+        ]
+        if len(matches) != 1:
+            raise CommandCenterError("Active project note was not found.")
+        block, archive = project_record_block(
+            "archive",
+            "Η σημείωση έργου αρχειοθετήθηκε.",
+            source,
+            record_id,
+        )
+        atomic_write(
+            note,
+            append_record_to_content(note.read_text(encoding="utf-8"), block),
+        )
+    audit_event(
+        "deleted",
+        "project-note",
+        name,
+        {"record_id": record_id, "archive_id": archive.id},
+    )
+    return {
+        "project": name,
+        "record_id": record_id,
+        "status": "archived",
+        "archive": asdict(archive),
+    }
+
+
 def set_project_summary(
     vault: Path,
     name: str,
@@ -1789,7 +1830,12 @@ tell application "Calendar"
             on error
                 set eventDescription to ""
             end try
-            set eventLine to my cleanText(calName) & tab & my cleanText(summary of evt) & tab & my isoDate(start date of evt) & tab & my isoDate(end date of evt) & tab & (allday event of evt as text) & tab & eventURL & tab & eventDescription
+            try
+                set eventUID to uid of evt as text
+            on error
+                set eventUID to ""
+            end try
+            set eventLine to my cleanText(calName) & tab & my cleanText(summary of evt) & tab & my isoDate(start date of evt) & tab & my isoDate(end date of evt) & tab & (allday event of evt as text) & tab & eventURL & tab & eventDescription & tab & eventUID
             set end of output to eventLine
         end repeat
     end repeat
@@ -1799,7 +1845,16 @@ return output as text
 '''
     events = parse_tabular_output(
         run_osascript(script),
-        ["calendar", "title", "start", "end", "all_day", "url", "description"],
+        [
+            "calendar",
+            "title",
+            "start",
+            "end",
+            "all_day",
+            "url",
+            "description",
+            "uid",
+        ],
     )
     events.sort(key=lambda event: (event["start"], event["calendar"], event["title"]))
     return events
@@ -1818,7 +1873,7 @@ tell application "Reminders"
             try
                 set dueDate to due date of reminderItem
                 if dueDate is not missing value and dueDate >= startDate and dueDate < endDate then
-                    set reminderLine to my cleanText(listName) & tab & my cleanText(name of reminderItem) & tab & my isoDate(dueDate) & tab & (completed of reminderItem as text)
+                    set reminderLine to my cleanText(listName) & tab & my cleanText(name of reminderItem) & tab & my isoDate(dueDate) & tab & (completed of reminderItem as text) & tab & my cleanText(id of reminderItem)
                     set end of output to reminderLine
                 end if
             end try
@@ -1830,7 +1885,7 @@ return output as text
 '''
     reminders = parse_tabular_output(
         run_osascript(script),
-        ["list", "title", "due", "completed"],
+        ["list", "title", "due", "completed", "id"],
     )
     return [
         {
@@ -1843,6 +1898,7 @@ return output as text
             "url": "",
             "description": "",
             "completed": reminder["completed"] == "true",
+            "uid": reminder["id"],
         }
         for reminder in reminders
     ]
@@ -1869,9 +1925,129 @@ def calendar_today() -> list[dict[str, Any]]:
                 and datetime.fromisoformat(event["end"]) <= now
             )
         )
+        ref_match = re.search(r"(?:^|\s)Ref:\s*([A-Za-z0-9]+)", event["description"])
+        event["command_center_ref"] = (
+            ref_match.group(1) if ref_match else None
+        )
     events.extend(reminders_today())
     events.sort(key=lambda event: (event["start"], event["calendar"], event["title"]))
     return events
+
+
+def delete_calendar_event(calendar: str, event_uid: str) -> None:
+    script = r'''
+on run argv
+    set calendarName to item 1 of argv
+    set eventUID to item 2 of argv
+    tell application "Calendar"
+        set targetCalendar to calendar calendarName
+        set matches to every event of targetCalendar whose uid is eventUID
+        if (count of matches) is 0 then error "Calendar event not found"
+        delete item 1 of matches
+    end tell
+end run
+'''
+    run_osascript(script, [calendar, event_uid])
+
+
+def delete_reminder_item(list_name: str, reminder_id: str) -> None:
+    script = r'''
+on run argv
+    set listName to item 1 of argv
+    set reminderId to item 2 of argv
+    tell application "Reminders"
+        set targetList to list listName
+        set matches to every reminder of targetList whose id is reminderId
+        if (count of matches) is 0 then error "Reminder not found"
+        delete item 1 of matches
+    end tell
+end run
+'''
+    run_osascript(script, [list_name, reminder_id])
+
+
+def delete_agenda_item(
+    vault: Path,
+    kind: str,
+    calendar: str,
+    item_uid: str,
+    title: str,
+    command_center_ref: str | None,
+) -> dict[str, Any]:
+    if kind not in {"event", "reminder"}:
+        raise CommandCenterError("Agenda kind must be event or reminder.")
+    if not calendar or not item_uid or not title:
+        raise CommandCenterError("Agenda delete requires calendar, UID, and title.")
+    linked_task = None
+    if kind == "reminder":
+        linked_task = next(
+            (
+                task
+                for task in parse_tasks(vault / TASKS_RELATIVE_PATH)
+                if task.calendar_uid == item_uid
+            ),
+            None,
+        )
+        delete_reminder_item(calendar, item_uid)
+        if linked_task and not linked_task.completed:
+            tasks_path = vault / TASKS_RELATIVE_PATH
+            with path_lock(tasks_path):
+                line = task_line(
+                    linked_task.title,
+                    completed=True,
+                    action_date=linked_task.action_date,
+                    completed_date=date.today().isoformat(),
+                )
+                replace_task_line(tasks_path, linked_task, line)
+            if linked_task.action_date:
+                delete_personal_daily_task(
+                    vault,
+                    linked_task.title,
+                    linked_task.action_date,
+                )
+    else:
+        if command_center_ref:
+            linked_task = next(
+                (
+                    task
+                    for task in parse_work_tasks(vault)
+                    if task.calendar_uid == command_center_ref
+                ),
+                None,
+            )
+        delete_calendar_event(calendar, item_uid)
+        if linked_task and not linked_task.completed:
+            note = vault / linked_task.path
+            with path_lock(note):
+                lines = note.read_text(encoding="utf-8").splitlines()
+                index = linked_task.line_number - 1
+                match = WORK_TASK_PATTERN.match(lines[index])
+                if not match:
+                    raise CommandCenterError(
+                        "Work note changed while deleting Agenda item."
+                    )
+                lines[index] = (
+                    f"{match.group('prefix')}[x] "
+                    f"{linked_task.title} → διαγράφηκε"
+                )
+                atomic_write(note, "\n".join(lines).rstrip() + "\n")
+    audit_event(
+        "deleted",
+        "agenda-item",
+        title,
+        {
+            "kind": kind,
+            "calendar": calendar,
+            "linked_task": bool(linked_task),
+        },
+    )
+    return {
+        "title": title,
+        "kind": kind,
+        "calendar": calendar,
+        "status": "deleted",
+        "linked_task_closed": bool(linked_task),
+    }
 
 
 def calendar_upcoming(minutes: int) -> list[dict[str, str]]:
@@ -3168,6 +3344,34 @@ def reopen_personal_daily_task(
         if match is None:
             return False
         lines[index] = f"{match.group('prefix')}[ ] {title}"
+        atomic_write(path, "\n".join(lines).rstrip() + "\n")
+    return True
+
+
+def delete_personal_daily_task(
+    vault: Path,
+    title: str,
+    target_date: str,
+) -> bool:
+    path = personal_daily_path(vault, date.fromisoformat(target_date))
+    if not path.is_file():
+        return False
+    with path_lock(path):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        matches = [
+            index
+            for index, line in enumerate(lines)
+            if (match := DAILY_TASK_PATTERN.match(line))
+            and match.group("state").lower() != "x"
+            and match.group("title").strip().casefold() == title.casefold()
+        ]
+        if len(matches) != 1:
+            return False
+        index = matches[0]
+        match = DAILY_TASK_PATTERN.match(lines[index])
+        if match is None:
+            return False
+        lines[index] = f"{match.group('prefix')}[x] {title} → διαγράφηκε"
         atomic_write(path, "\n".join(lines).rstrip() + "\n")
     return True
 
@@ -4795,6 +4999,13 @@ def build_parser() -> argparse.ArgumentParser:
     project_record_parser.add_argument("--text", required=True)
     project_record_parser.add_argument("--source", required=True)
     project_record_parser.add_argument("--supersedes")
+    project_archive_parser = commands.add_parser("project-record-archive")
+    project_archive_parser.add_argument("--name", required=True)
+    project_archive_parser.add_argument("--id", required=True)
+    project_archive_parser.add_argument(
+        "--source",
+        default="Command Center",
+    )
     summary_parser = commands.add_parser("project-summary-set")
     summary_parser.add_argument("--name", required=True)
     summary_parser.add_argument("--text", required=True)
@@ -4900,6 +5111,16 @@ def build_parser() -> argparse.ArgumentParser:
     calendar_add.add_argument("--title", required=True)
     calendar_add.add_argument("--start", required=True)
     calendar_add.add_argument("--duration", type=int, default=60)
+    agenda_delete = commands.add_parser("agenda-delete")
+    agenda_delete.add_argument(
+        "--kind",
+        required=True,
+        choices=["event", "reminder"],
+    )
+    agenda_delete.add_argument("--calendar", required=True)
+    agenda_delete.add_argument("--uid", required=True)
+    agenda_delete.add_argument("--title", required=True)
+    agenda_delete.add_argument("--ref")
     reminder_list = commands.add_parser("reminder-list")
     reminder_list.add_argument("--list", default="Reminders")
     reminder_add = commands.add_parser("reminder-add")
@@ -4997,6 +5218,15 @@ def main() -> None:
             if args.kind:
                 records = [record for record in records if record.kind == args.kind]
             emit({"records": [asdict(record) for record in records]})
+        elif args.command == "project-record-archive":
+            emit(
+                archive_project_record(
+                    vault,
+                    args.name,
+                    args.id,
+                    args.source,
+                )
+            )
         elif args.command == "project-record":
             emit(
                 asdict(
@@ -5142,6 +5372,17 @@ def main() -> None:
                     args.title,
                     args.start,
                     args.duration,
+                )
+            )
+        elif args.command == "agenda-delete":
+            emit(
+                delete_agenda_item(
+                    vault,
+                    args.kind,
+                    args.calendar,
+                    args.uid,
+                    args.title,
+                    args.ref,
                 )
             )
         elif args.command == "reminder-list":

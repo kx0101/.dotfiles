@@ -34,6 +34,11 @@ python3 scripts/command_center.py github
 python3 scripts/command_center.py calendar-today
 python3 scripts/command_center.py calendar-upcoming --minutes 15
 python3 scripts/command_center.py calendar-range --days 14
+python3 scripts/command_center.py agenda-delete \
+  --kind event \
+  --calendar Work \
+  --uid EVENT_UID \
+  --title "Συμβάν"
 python3 scripts/command_center.py reminder-list
 python3 scripts/command_center.py reminder-add \
   --title "Να ελέγξω τα τιμολόγια" \
@@ -161,6 +166,10 @@ python3 scripts/command_center.py project-health --name BookIt
 python3 scripts/command_center.py bookit-business
 python3 scripts/command_center.py project-records --name BookIt
 python3 scripts/command_center.py project-records --name BookIt --kind requirement
+python3 scripts/command_center.py project-record-archive \
+  --name BookIt \
+  --id RECORD_ID \
+  --source "Command Center"
 
 python3 scripts/command_center.py project-add \
   --name "New Project" \

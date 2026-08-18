@@ -123,6 +123,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "/api/capture",
             "/api/calendar/add",
             "/api/scratchpad",
+            "/api/project/note/archive",
+            "/api/agenda/delete",
         }
         if path not in allowed_paths:
             self._send_json(HTTPStatus.NOT_FOUND, {"error": "Not found."})
@@ -213,6 +215,58 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
 
         title = str(payload.get("title") or "").strip()
+        if path == "/api/project/note/archive":
+            project = str(payload.get("project") or "").strip()
+            record_id = str(payload.get("id") or "").strip()
+            if not project or not record_id:
+                self._send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {"error": "Project and note ID are required."},
+                )
+                return
+            self._serve_command(
+                (
+                    "project-record-archive",
+                    "--name",
+                    project,
+                    "--id",
+                    record_id,
+                    "--source",
+                    "Command Center dashboard",
+                )
+            )
+            return
+        if path == "/api/agenda/delete":
+            kind = str(payload.get("kind") or "")
+            calendar = str(payload.get("calendar") or "")
+            item_uid = str(payload.get("uid") or "")
+            command_ref = str(payload.get("ref") or "")
+            if (
+                kind not in {"event", "reminder"}
+                or not calendar
+                or not item_uid
+                or not title
+            ):
+                self._send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {"error": "Valid Agenda item data is required."},
+                )
+                return
+            command = [
+                "agenda-delete",
+                "--kind",
+                kind,
+                "--calendar",
+                calendar,
+                "--uid",
+                item_uid,
+                "--title",
+                title,
+            ]
+            if command_ref:
+                command.extend(["--ref", command_ref])
+            self._serve_command(tuple(command))
+            return
         if path == "/api/reminder/update":
             identifier = str(payload.get("id") or "").strip()
             reminder_date = str(payload.get("date") or "").strip()
