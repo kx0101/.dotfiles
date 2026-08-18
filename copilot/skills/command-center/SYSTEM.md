@@ -65,10 +65,6 @@ Both apps use the same panel order, DOM interface, workbench styling, responsive
 breakpoints, capture patterns, task tree, project cards, and dialogs. Keep CSS
 shared; do not create a second Vercel theme.
 
-Desktop uses a sticky Personal OS sidebar and workspace. Below 820 px the same
-navigation becomes a horizontal sticky section bar and every panel becomes a
-single-column touch-friendly card.
-
 The Scratchpad autosaves after 800 ms, is owner-only, and persists until Clear.
 It is not Inbox, project memory, or a Markdown note.
 
