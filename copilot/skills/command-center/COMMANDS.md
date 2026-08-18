@@ -83,7 +83,7 @@ never present a partial result as fully successful.
 Scheduled briefings are stored privately under
 `~/Library/Application Support/Command Center/Briefings/`, not in the Obsidian
 vault. The morning briefing includes urgent items, calls, calendar entries,
-Reminders, and mirrored todos for today.
+Reminders, and daily todos for today.
 Nested Work tasks include their parent path in JSON output and briefing previews.
 The native Briefing Window opens automatically after a scheduled briefing is
 generated; the notification remains available as a reminder.
@@ -96,16 +96,15 @@ The local dashboard listens only on `http://127.0.0.1:4317`. Its LaunchAgent
 starts it at login and keeps it running. Browser code receives data through
 independent CLI-backed endpoints and never reads or edits the vault directly.
 Writes for tasks, reminders, Learning, captures, and Calendar events route through
-the CLI so Markdown and macOS integrations remain synchronized.
+the CLI. Tasks remain separate from Reminders and Calendar events.
 Pending Learning items and metadata-only messages received in the last 48 hours
 by `liakos.koulaxis@yahoo.com` load in independent panels.
 Learning is grouped into Books, Articles, and Videos. Dashboard removal calls
 `learning-complete`, preserving history rather than deleting the item.
 Mail cards open the exact local message in Apple Mail. Agenda Join actions support
 Google Meet, Microsoft Teams, and Zoom URLs exposed by Calendar.
-The Reminders panel reads and mutates only the `Reminders` list. Completing a
-task-synced reminder routes through task completion; standalone reminders are
-completed directly in macOS Reminders.
+The Reminders panel reads and mutates only the `Reminders` list. Tasks do not
+create or update Reminders.
 
 `cloud/` contains the Vercel web app and Supabase schemas. The owner-only Mac
 agent publishes the approved snapshot every 60 seconds and executes allowlisted

@@ -356,6 +356,78 @@ def audit_list(limit: int) -> list[dict[str, Any]]:
     return list(reversed(events[-limit:]))
 
 
+def detach_task_providers(vault: Path) -> dict[str, Any]:
+    removed = {"reminders": 0, "calendar_events": 0, "lines": 0}
+    tasks_path = vault / TASKS_RELATIVE_PATH
+    if tasks_path.is_file():
+        with path_lock(tasks_path):
+            lines = tasks_path.read_text(encoding="utf-8").splitlines()
+            for index, line in enumerate(lines):
+                metadata_match = CALENDAR_METADATA_PATTERN.search(line)
+                if not metadata_match:
+                    continue
+                metadata = json.loads(metadata_match.group("metadata"))
+                provider = metadata.get("provider")
+                name = metadata.get("name")
+                uid = metadata.get("uid")
+                if provider == "reminders" and name and uid:
+                    removed["reminders"] += int(delete_reminder_item(name, uid))
+                elif provider == "calendar" and name and uid:
+                    removed["calendar_events"] += int(
+                        delete_calendar_event_by_ref(name, uid)
+                    )
+                lines[index] = CALENDAR_METADATA_PATTERN.sub("", line).rstrip()
+                removed["lines"] += 1
+            atomic_write(tasks_path, "\n".join(lines).rstrip() + "\n")
+
+    root = work_daily_root(vault)
+    if root.is_dir():
+        for note in sorted(root.glob("*/*.md")):
+            with path_lock(note):
+                lines = note.read_text(encoding="utf-8").splitlines()
+                changed = False
+                for index, line in enumerate(lines):
+                    metadata_match = CALENDAR_METADATA_PATTERN.search(line)
+                    if not metadata_match:
+                        continue
+                    metadata = json.loads(metadata_match.group("metadata"))
+                    name = metadata.get("name")
+                    uid = metadata.get("uid")
+                    if name and uid:
+                        removed["calendar_events"] += int(
+                            delete_calendar_event_by_ref(name, uid)
+                        )
+                    lines[index] = CALENDAR_METADATA_PATTERN.sub(
+                        "",
+                        line,
+                    ).rstrip()
+                    removed["lines"] += 1
+                    changed = True
+                if changed:
+                    atomic_write(note, "\n".join(lines).rstrip() + "\n")
+    script = r'''
+set deletedCount to 0
+tell application "Calendar"
+    repeat with targetCalendar in calendars
+        set matches to every event of targetCalendar whose description contains "Command Center todo"
+        repeat with targetEvent in matches
+            delete targetEvent
+            set deletedCount to deletedCount + 1
+        end repeat
+    end repeat
+end tell
+return deletedCount as text
+'''
+    removed["calendar_events"] += int(run_osascript(script) or "0")
+    audit_event(
+        "detached",
+        "task-sync",
+        "Tasks αποσυνδέθηκαν από Reminders/Calendar",
+        removed,
+    )
+    return removed
+
+
 def validate_iso_date(value: str) -> str:
     try:
         date.fromisoformat(value)
@@ -704,15 +776,6 @@ def add_task(
     sync_provider = None
     calendar_name = None
     calendar_uid = None
-    if action_date:
-        sync_provider = "reminders"
-        calendar_name = "Reminders"
-        calendar_uid = add_synced_todo(
-            sync_provider,
-            calendar_name,
-            title,
-            action_date,
-        )
 
     tasks_path = vault / TASKS_RELATIVE_PATH
     with path_lock(tasks_path):
@@ -980,10 +1043,10 @@ def reschedule_task(vault: Path, query: str, action_date: str) -> dict[str, Any]
     tasks_path = vault / TASKS_RELATIVE_PATH
     with path_lock(tasks_path):
         task = select_task(tasks_path, query)
-        sync_provider = task.sync_provider or "reminders"
-        calendar_name = task.calendar_name or "Reminders"
+        sync_provider = task.sync_provider
+        calendar_name = task.calendar_name
         calendar_uid = task.calendar_uid
-        if calendar_uid:
+        if calendar_uid and sync_provider and calendar_name:
             update_synced_todo(
                 sync_provider,
                 calendar_name,
@@ -991,13 +1054,6 @@ def reschedule_task(vault: Path, query: str, action_date: str) -> dict[str, Any]
                 title=task.title,
                 action_date=action_date,
                 completed=False,
-            )
-        else:
-            calendar_uid = add_synced_todo(
-                sync_provider,
-                calendar_name,
-                task.title,
-                action_date,
             )
         line = task_line(
             task.title,
@@ -1062,10 +1118,10 @@ def update_task(
     tasks_path = vault / TASKS_RELATIVE_PATH
     with path_lock(tasks_path):
         task = select_task(tasks_path, query, current_date)
-        sync_provider = task.sync_provider or "reminders"
-        calendar_name = task.calendar_name or "Reminders"
+        sync_provider = task.sync_provider
+        calendar_name = task.calendar_name
         calendar_uid = task.calendar_uid
-        if calendar_uid:
+        if calendar_uid and sync_provider and calendar_name:
             update_synced_todo(
                 sync_provider,
                 calendar_name,
@@ -1073,13 +1129,6 @@ def update_task(
                 title=new_title,
                 action_date=new_date,
                 completed=False,
-            )
-        else:
-            calendar_uid = add_synced_todo(
-                sync_provider,
-                calendar_name,
-                new_title,
-                new_date,
             )
         line = task_line(
             new_title,
@@ -3396,7 +3445,7 @@ def open_daily_lines(path: Path) -> list[str]:
             or entry["path_key"] in seen
         ):
             continue
-        line = entry["raw"]
+        line = CALENDAR_METADATA_PATTERN.sub("", entry["raw"]).rstrip()
         if entry["completed"]:
             line = re.sub(r"\[[xX]\]", "[ ]", line, count=1)
         carried.append(line)
@@ -3977,17 +4026,10 @@ def add_work_task(
         raise CommandCenterError("Work task title must fit on one non-empty line.")
     if parent_line is not None and parent_line < 1:
         raise CommandCenterError("Work parent line must be positive.")
-    calendar_name = "Work"
-    sync_provider = "calendar"
-    calendar_uid = add_calendar_todo(
-        calendar_name,
-        normalized_title,
-        task_date,
-    )
-    line = (
-        f"- [ ] {normalized_title}"
-        f"{calendar_metadata(calendar_name, calendar_uid, sync_provider)}"
-    )
+    calendar_name = None
+    sync_provider = None
+    calendar_uid = None
+    line = f"- [ ] {normalized_title}"
     note = work_daily_path(vault, date.fromisoformat(task_date))
     with path_lock(note):
         if note.exists():
@@ -4060,7 +4102,6 @@ def add_work_task(
             next_number = max(child_numbers, default=0) + 1
             nested_line = (
                 f"{child_leading}{next_number}. [ ] {normalized_title}"
-                f"{calendar_metadata(calendar_name, calendar_uid, sync_provider)}"
             )
             lines.insert(insertion, nested_line)
             atomic_write(note, "\n".join(lines).rstrip() + "\n")
@@ -4265,10 +4306,10 @@ def reschedule_work_task(
             [asdict(task) for task in matches],
         )
     task = matches[0]
-    calendar_name = task.calendar_name or "Work"
-    sync_provider = task.sync_provider or "calendar"
+    calendar_name = task.calendar_name
+    sync_provider = task.sync_provider
     calendar_uid = task.calendar_uid
-    if calendar_uid:
+    if calendar_uid and calendar_name and sync_provider:
         update_synced_todo(
             sync_provider,
             calendar_name,
@@ -4276,13 +4317,6 @@ def reschedule_work_task(
             title=task.title,
             action_date=task_date,
             completed=False,
-        )
-    else:
-        calendar_uid = add_synced_todo(
-            sync_provider,
-            calendar_name,
-            task.title,
-            task_date,
         )
 
     source_note = vault / task.path
@@ -4362,10 +4396,10 @@ def update_work_task(
             [asdict(task) for task in matches],
         )
     task = matches[0]
-    calendar_name = task.calendar_name or "Work"
-    sync_provider = task.sync_provider or "calendar"
+    calendar_name = task.calendar_name
+    sync_provider = task.sync_provider
     calendar_uid = task.calendar_uid
-    if calendar_uid:
+    if calendar_uid and calendar_name and sync_provider:
         update_synced_todo(
             sync_provider,
             calendar_name,
@@ -4373,13 +4407,6 @@ def update_work_task(
             title=new_title,
             action_date=new_date,
             completed=False,
-        )
-    else:
-        calendar_uid = add_synced_todo(
-            sync_provider,
-            calendar_name,
-            new_title,
-            new_date,
         )
     source_note = vault / task.path
     target_note = work_daily_path(vault, date.fromisoformat(new_date))
@@ -5616,6 +5643,7 @@ def build_parser() -> argparse.ArgumentParser:
     audit_parser = commands.add_parser("audit-list")
     audit_parser.add_argument("--limit", type=int, default=100)
     commands.add_parser("sync-status")
+    commands.add_parser("task-sync-detach")
     commands.add_parser("snapshot-list")
     snapshot_get = commands.add_parser("snapshot-get")
     snapshot_get.add_argument("--date", required=True)
@@ -5896,6 +5924,8 @@ def main() -> None:
             emit({"events": audit_list(args.limit)})
         elif args.command == "sync-status":
             emit(cloud_sync_status())
+        elif args.command == "task-sync-detach":
+            emit(detach_task_providers(vault))
         elif args.command == "snapshot-list":
             emit({"snapshots": daily_snapshot_list()})
         elif args.command == "snapshot-get":

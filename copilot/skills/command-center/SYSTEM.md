@@ -39,19 +39,19 @@ invokes providers directly.
 | Project metadata/memory | `Command Center/Projects/*.md` |
 | Learning | `Command Center/Learning.md` |
 | Scratchpad | Supabase `command_center_scratchpad` |
-| Reminders/events | macOS Reminders/Calendar, linked by stored IDs |
+| Reminders/events | macOS Reminders/Calendar |
 | Apple Health summary | Supabase `command_center_health_daily` |
 | Audit timeline | `~/Library/Application Support/Command Center/audit.jsonl` |
 | Daily history | Supabase `command_center_daily_snapshots` |
 
 `daily-rollover` creates date/month files and carries only incomplete,
-deduplicated items. Personal task add/complete/reschedule updates Tasks, daily
-files, and Reminders. Dated Work mutations update the Daily Note and Work
-Calendar.
+deduplicated items. Personal task add/complete/reschedule updates Tasks and daily
+files. Dated Work mutations update the Daily Note. Tasks, Reminders, and Calendar
+events are independent capture types.
 
-Inline `<!-- calendar: ... -->` blocks are machine metadata linking a Markdown
-todo to its exact Calendar/Reminder item. Obsidian hides them in Reading/Live
-Preview. Keep them intact; Source mode shows them by design.
+Legacy `<!-- calendar: ... -->` blocks linked old mirrored tasks to providers.
+`task-sync-detach` removes those provider items and metadata. New tasks contain no
+provider metadata.
 
 ## Web apps
 

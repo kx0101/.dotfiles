@@ -34,7 +34,7 @@ when the user asks for them or the application preference enables them.
 Scheduled briefings run locally through macOS LaunchAgents at 08:30 daily and
 08:30 every Monday. The morning briefing must include urgent items for today,
 calls and meetings, all-day calendar entries such as holidays/birthdays/notes,
-Reminders, and mirrored todos. Briefing archives stay outside the vault under
+Reminders, and daily todos. Briefing archives stay outside the vault under
 `~/Library/Application Support/Command Center/Briefings/`.
 The native Briefing Window opens automatically after generation; the notification
 is a secondary reminder rather than the only way to reach the briefing.
@@ -57,9 +57,10 @@ or provider integrations directly.
 
 The dashboard may add and complete Personal or Work tasks through same-origin,
 JSON-only POST actions. Route Personal through `task-add`/`task-complete` so
-Tasks, the Personal daily file, and Reminders stay synchronized. Route Work
-through `work-task-add`/`work-task-complete` so its Daily Note and Calendar stay
-synchronized. Completed daily tasks remain visible as checked items.
+Tasks and the Personal daily file stay synchronized. Route Work through
+`work-task-add`/`work-task-complete` so its Daily Note stays synchronized.
+Tasks, Reminders, and Calendar events are separate entities. Completed daily
+tasks remain visible as checked items.
 Task and Reminder edits must route through the corresponding update command so
 title/date changes propagate to Markdown and macOS. Historical snapshot views are
 read-only.
@@ -79,11 +80,9 @@ the configured Yahoo account within the last 48 hours, with Read/Unread state.
 Dashboard health checks must use registered liveness endpoints that do not query
 the database. Readiness endpoints are reserved for deployment/orchestrator gates.
 
-The Reminders panel manages the fixed macOS `Reminders` list. It may add dated or
-undated reminders and complete them. If a reminder ID belongs to a Personal task,
-route completion through `task-complete` so Tasks, the daily file, and Reminders
-remain synchronized. Standalone reminders are completed directly and never
-deleted.
+The Reminders panel independently manages the fixed macOS `Reminders` list. It
+may add dated or undated reminders and complete them. Creating a task never
+creates a Reminder; creating a Reminder never creates a task.
 
 ## Cloud/mobile
 
@@ -131,12 +130,11 @@ undated Work inbox tasks. Dated Work tasks live in the matching Work Daily Note.
 - Use a named project when explicit. Otherwise use `Personal` or `Work`; ask one
   short question when the area is genuinely ambiguous.
 - Route dated Work tasks through `work-task-add`, not `task-add`.
-- Every dated todo is mirrored into the macOS schedule: personal/projects become
-  due-dated items in the `Reminders` list (visible in Calendar under
-  `Scheduled Reminders`); Work becomes an all-day event in `Work`.
-- Rescheduling moves the same event. Completion keeps it as `✓` for history.
-- The calendar UID stored in the Markdown task is implementation metadata; never
-  remove or hand-edit it.
+- Personal/Work tasks persist only in their Markdown sources and cloud snapshot.
+  Reminders and Calendar events are created only through their explicit capture
+  types.
+- Legacy inline calendar metadata may remain in historical notes; new tasks do
+  not write it.
 - Use the CLI for add, complete, reschedule, and list operations. Never edit task
   lines with ad-hoc text replacement.
 - On an ambiguous completion or reschedule match, show the CLI's candidates and
@@ -247,15 +245,14 @@ delivery event. Never expose a full recipient address.
 ## Calendar
 
 Calendar reads include every calendar and every event visible to macOS:
-timed events, all-day entries, holidays, birthdays, notes/reminders, and mirrored
-todos. Group them by date and type rather than silently filtering categories.
+timed events, all-day entries, holidays, birthdays, and reminders. Group them by
+date and type rather than silently filtering categories.
 Agenda entries expose a direct Join action when their URL or description contains
 a Google Meet, Microsoft Teams, or Zoom link.
 
-For ordinary events, always ask which calendar to use. Also resolve ambiguity in
-title, local start time, or duration before the write. Todo mirroring is the only
-exception: it uses the fixed calendars defined above. Echo the exact event and
-calendar after creation.
+For events, always ask which calendar to use. Also resolve ambiguity in title,
+local start time, or duration before the write. Echo the exact event and calendar
+after creation.
 
 ## Email
 
