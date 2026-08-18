@@ -175,6 +175,13 @@ function renderTaskTree(selector, items, area) {
       });
       row.append(edit);
     }
+    const remove = element("button", "task-delete", "Διαγραφή");
+    remove.type = "button";
+    remove.addEventListener("click", (event) => {
+      event.preventDefault();
+      deleteTodo(area, item, remove);
+    });
+    row.append(remove);
     const depth = Math.min(item.parent_path?.length ?? 0, 8);
     row.classList.add(`task-depth-${depth}`);
     container.append(row);
@@ -976,6 +983,23 @@ async function reopenTask(area, item, checkbox, row) {
     checkbox.disabled = false;
     row.classList.remove("pending");
     setStatus(`Αποτυχία επαναφοράς: ${error.message}`, true);
+  }
+}
+
+async function deleteTodo(area, item, button) {
+  if (!window.confirm(`Να διαγραφεί το todo «${item.title}»;`)) return;
+  button.disabled = true;
+  try {
+    await mutate("/api/task/delete", {
+      title: item.title,
+      area,
+      date: item.task_date,
+    });
+    await refreshTasks();
+    setStatus(`Διαγράφηκε: ${item.title}`);
+  } catch (error) {
+    button.disabled = false;
+    setStatus(`Αποτυχία διαγραφής: ${error.message}`, true);
   }
 }
 

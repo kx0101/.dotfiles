@@ -894,6 +894,78 @@ def reopen_task(
     }
 
 
+def delete_task(
+    vault: Path,
+    query: str,
+    action_date: str,
+) -> dict[str, Any]:
+    validate_iso_date(action_date)
+    normalized = " ".join(query.split()).casefold()
+    tasks_path = vault / TASKS_RELATIVE_PATH
+    with path_lock(tasks_path):
+        matches = [
+            task
+            for task in parse_tasks(tasks_path)
+            if task.action_date == action_date
+            and task.title.casefold() == normalized
+            and not task.title.endswith("→ διαγράφηκε")
+        ]
+        if len(matches) != 1:
+            raise CommandCenterError(
+                f"Expected one task matching: {query}",
+                [asdict(task) for task in matches],
+            )
+        task = matches[0]
+        descendants = [
+            item
+            for item in list_daily_tasks(vault, action_date, True)["personal"]
+            if task.title in item.get("parent_path", [])
+        ]
+        if descendants:
+            raise CommandCenterError(
+                "Delete child todos before deleting their parent.",
+                descendants,
+            )
+        if task.calendar_uid:
+            if (task.sync_provider or "reminders") == "reminders":
+                delete_reminder_item(
+                    task.calendar_name or "Reminders",
+                    task.calendar_uid,
+                )
+            else:
+                delete_calendar_event(
+                    task.calendar_name or "Work",
+                    task.calendar_uid,
+                )
+        line = task_line(
+            f"{task.title} → διαγράφηκε",
+            completed=True,
+            action_date=action_date,
+            completed_date=date.today().isoformat(),
+        )
+        replace_task_line(tasks_path, task, line)
+    daily_synced = False
+    if section_uses_personal_daily(vault, task.section):
+        daily_synced = delete_personal_daily_task(
+            vault,
+            task.title,
+            action_date,
+        )
+    audit_event(
+        "deleted",
+        "task",
+        task.title,
+        {"area": task.section, "date": action_date},
+    )
+    return {
+        "title": task.title,
+        "section": task.section,
+        "status": "deleted",
+        "date": action_date,
+        "daily_synced": daily_synced,
+    }
+
+
 def reschedule_task(vault: Path, query: str, action_date: str) -> dict[str, Any]:
     validate_iso_date(action_date)
     tasks_path = vault / TASKS_RELATIVE_PATH
@@ -1948,6 +2020,22 @@ on run argv
 end run
 '''
     run_osascript(script, [calendar, event_uid])
+
+
+def delete_calendar_event_by_ref(calendar: str, calendar_ref: str) -> None:
+    script = r'''
+on run argv
+    set calendarName to item 1 of argv
+    set calendarRef to item 2 of argv
+    tell application "Calendar"
+        set targetCalendar to calendar calendarName
+        set matches to every event of targetCalendar whose description contains ("Ref: " & calendarRef)
+        if (count of matches) is 0 then error "Calendar todo not found"
+        delete item 1 of matches
+    end tell
+end run
+'''
+    run_osascript(script, [calendar, calendar_ref])
 
 
 def delete_reminder_item(list_name: str, reminder_id: str) -> None:
@@ -3362,7 +3450,6 @@ def delete_personal_daily_task(
             index
             for index, line in enumerate(lines)
             if (match := DAILY_TASK_PATTERN.match(line))
-            and match.group("state").lower() != "x"
             and match.group("title").strip().casefold() == title.casefold()
         ]
         if len(matches) != 1:
@@ -3497,6 +3584,8 @@ def list_daily_tasks(
             while hierarchy and indent <= hierarchy[-1][0]:
                 hierarchy.pop()
             title = match.group("title").strip()
+            if title.endswith("→ διαγράφηκε"):
+                continue
             completed = match.group("state").lower() == "x"
             if include_completed or not completed:
                 personal.append(
@@ -3514,6 +3603,7 @@ def list_daily_tasks(
         asdict(task)
         for task in parse_work_tasks(vault)
         if task.task_date == target_date
+        and not task.title.endswith("→ διαγράφηκε")
         and (include_completed or not task.completed)
     ]
     return {"personal": personal, "work": work}
@@ -3785,6 +3875,65 @@ def reopen_work_task(
         {"date": task_date},
     )
     return asdict(task) | {"completed": False}
+
+
+def delete_work_task(
+    vault: Path,
+    query: str,
+    task_date: str,
+) -> dict[str, Any]:
+    validate_iso_date(task_date)
+    normalized = query.casefold().strip()
+    matches = [
+        task
+        for task in parse_work_tasks(vault)
+        if task.task_date == task_date
+        and task.title.casefold() == normalized
+        and not task.title.endswith("→ διαγράφηκε")
+    ]
+    if len(matches) != 1:
+        raise CommandCenterError(
+            f"Expected one Work task matching: {query}",
+            [asdict(task) for task in matches],
+        )
+    task = matches[0]
+    descendants = [
+        item
+        for item in list_daily_tasks(vault, task_date, True)["work"]
+        if task.title in item.get("parent_path", [])
+    ]
+    if descendants:
+        raise CommandCenterError(
+            "Delete child Work todos before deleting their parent.",
+            descendants,
+        )
+    if task.calendar_uid:
+        delete_calendar_event_by_ref(
+            task.calendar_name or "Work",
+            task.calendar_uid,
+        )
+    note = vault / task.path
+    with path_lock(note):
+        lines = note.read_text(encoding="utf-8").splitlines()
+        index = task.line_number - 1
+        match = WORK_TASK_PATTERN.match(lines[index])
+        if not match:
+            raise CommandCenterError("Work note changed while deleting task.")
+        lines[index] = (
+            f"{match.group('prefix')}[x] {task.title} → διαγράφηκε"
+        )
+        atomic_write(note, "\n".join(lines).rstrip() + "\n")
+    audit_event(
+        "deleted",
+        "work-task",
+        task.title,
+        {"date": task_date},
+    )
+    return {
+        "title": task.title,
+        "status": "deleted",
+        "date": task_date,
+    }
 
 
 def reschedule_work_task(
@@ -4970,6 +5119,9 @@ def build_parser() -> argparse.ArgumentParser:
     task_reopen = commands.add_parser("task-reopen")
     task_reopen.add_argument("--query", required=True)
     task_reopen.add_argument("--date", required=True)
+    task_delete = commands.add_parser("task-delete")
+    task_delete.add_argument("--query", required=True)
+    task_delete.add_argument("--date", required=True)
 
     task_reschedule = commands.add_parser("task-reschedule")
     task_reschedule.add_argument("--query", required=True)
@@ -5082,6 +5234,9 @@ def build_parser() -> argparse.ArgumentParser:
     work_task_reopen = commands.add_parser("work-task-reopen")
     work_task_reopen.add_argument("--query", required=True)
     work_task_reopen.add_argument("--date", required=True)
+    work_task_delete = commands.add_parser("work-task-delete")
+    work_task_delete.add_argument("--query", required=True)
+    work_task_delete.add_argument("--date", required=True)
     work_task_reschedule = commands.add_parser("work-task-reschedule")
     work_task_reschedule.add_argument("--query", required=True)
     work_task_reschedule.add_argument("--date", required=True)
@@ -5197,6 +5352,8 @@ def main() -> None:
             emit(complete_task(vault, args.query, args.date))
         elif args.command == "task-reopen":
             emit(reopen_task(vault, args.query, args.date))
+        elif args.command == "task-delete":
+            emit(delete_task(vault, args.query, args.date))
         elif args.command == "task-reschedule":
             emit(reschedule_task(vault, args.query, args.date))
         elif args.command == "task-update":
@@ -5341,6 +5498,8 @@ def main() -> None:
             emit(complete_work_task(vault, args.query, args.date))
         elif args.command == "work-task-reopen":
             emit(reopen_work_task(vault, args.query, args.date))
+        elif args.command == "work-task-delete":
+            emit(delete_work_task(vault, args.query, args.date))
         elif args.command == "work-task-reschedule":
             emit(reschedule_work_task(vault, args.query, args.date))
         elif args.command == "work-task-update":

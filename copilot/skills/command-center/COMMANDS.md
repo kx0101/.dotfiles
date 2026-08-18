@@ -152,6 +152,9 @@ python3 scripts/command_center.py task-update \
   --current-date 2026-08-21 \
   --title "Να ελέγξω το checkout" \
   --date 2026-08-22
+python3 scripts/command_center.py task-delete \
+  --query "Να ελέγξω το checkout" \
+  --date 2026-08-22
 ```
 
 Use either `--project` or `--area`, not both. Valid areas are `Personal` and
@@ -246,6 +249,9 @@ python3 scripts/command_center.py work-task-update \
   --query "ελέγξω το PR" \
   --current-date 2026-08-20 \
   --title "Να ολοκληρώσω το PR review" \
+  --date 2026-08-21
+python3 scripts/command_center.py work-task-delete \
+  --query "Να ολοκληρώσω το PR review" \
   --date 2026-08-21
 
 python3 scripts/command_center.py work-append \

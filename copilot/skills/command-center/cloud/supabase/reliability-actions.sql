@@ -18,6 +18,8 @@ alter table public.command_center_commands
       'complete-learning',
       'reopen-personal-task',
       'reopen-work-task',
+      'delete-personal-task',
+      'delete-work-task',
       'update-personal-task',
       'update-work-task',
       'update-reminder'

@@ -398,7 +398,8 @@ body.history-mode #clear-scratchpad {
 }
 
 .agenda-delete,
-.note-delete {
+.note-delete,
+.task-delete {
   flex: 0 0 auto;
   padding: 4px 7px;
   color: var(--bad);

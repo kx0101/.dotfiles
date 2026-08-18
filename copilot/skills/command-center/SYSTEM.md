@@ -119,6 +119,13 @@ Allowlisted cloud writes:
 
 Pending/processing commands overlay the Vercel snapshot so a refresh does not
 temporarily revert checked UI state.
+Every mutable row sends an `entity_key`. Supabase enforces one pending/processing
+command per entity, and the UI disables that row until the command settles. This
+prevents rapid checkbox clicks from queuing contradictory complete/reopen actions.
+
+Todo deletion is a soft delete: the provider item is removed, Markdown is marked
+`→ διαγράφηκε`, the active dashboard hides it, and audit/history retain it.
+Parents with children must have their children deleted first.
 
 The sync panel shows current snapshot time and pending/processing/failed counts.
 Successful mutations append audit events with `cli`, `local-web`, or `vercel`
@@ -135,6 +142,7 @@ Run SQL files in order:
 5. `cloud/supabase/scratchpad.sql`
 6. `cloud/supabase/reliability-actions.sql`
 7. `cloud/supabase/daily-snapshots.sql`
+8. `cloud/supabase/command-locks.sql`
 
 Public browser configuration belongs in ignored `cloud/.env.local` and Vercel:
 

@@ -114,6 +114,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "/api/task/add",
             "/api/task/complete",
             "/api/task/reopen",
+            "/api/task/delete",
             "/api/task/update",
             "/api/learning/add",
             "/api/learning/complete",
@@ -499,15 +500,23 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 if area == "Personal"
                 else ("work-task-add", "--title", title, "--date", task_date)
             )
-        elif path in {"/api/task/complete", "/api/task/reopen"}:
+        elif path in {
+            "/api/task/complete",
+            "/api/task/reopen",
+            "/api/task/delete",
+        }:
             command_name = (
                 "task-complete"
                 if area == "Personal" and path.endswith("/complete")
                 else "task-reopen"
+                if area == "Personal" and path.endswith("/reopen")
+                else "task-delete"
                 if area == "Personal"
                 else "work-task-complete"
                 if path.endswith("/complete")
                 else "work-task-reopen"
+                if path.endswith("/reopen")
+                else "work-task-delete"
             )
             command = (
                 command_name,

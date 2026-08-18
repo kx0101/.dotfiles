@@ -22,6 +22,7 @@ credentials. RLS and the client gate allow only the configured GitHub user UUID.
    - [`supabase/scratchpad.sql`](supabase/scratchpad.sql)
    - [`supabase/reliability-actions.sql`](supabase/reliability-actions.sql)
    - [`supabase/daily-snapshots.sql`](supabase/daily-snapshots.sql)
+   - [`supabase/command-locks.sql`](supabase/command-locks.sql)
 3. Enable GitHub under Authentication → Providers.
 4. Add the local and eventual Vercel URLs to Authentication → URL Configuration.
 5. Copy `.env.example` to `.env.local` and set the project URL and anon key.

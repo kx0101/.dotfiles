@@ -26,6 +26,20 @@ function isHistorical() {
   return selectedDate !== localDate();
 }
 
+function taskEntityKey(area, item) {
+  return [
+    "task",
+    area,
+    item.path ?? "",
+    item.line_number ?? "",
+    item.task_date ?? "",
+  ].join(":");
+}
+
+function reminderEntityKey(item) {
+  return `reminder:${item.id}`;
+}
+
 function element(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -65,6 +79,12 @@ function renderTasks(selector, items, action) {
     return;
   }
   for (const item of items) {
+    const area =
+      action === "complete-work-task" ? "work" : "personal";
+    const entityKey = taskEntityKey(area, item);
+    const locked = pendingCommands.some(
+      (command) => command.entity_key === entityKey,
+    );
     const row = element(
       "label",
       `task-row${item.completed ? " completed" : ""}`,
@@ -74,8 +94,9 @@ function renderTasks(selector, items, action) {
     const checkbox = element("input");
     checkbox.type = "checkbox";
     checkbox.checked = Boolean(item.completed);
-    checkbox.disabled = isHistorical();
-    if (!isHistorical()) {
+    checkbox.disabled = isHistorical() || locked;
+    if (locked) row.classList.add("pending");
+    if (!isHistorical() && !locked) {
       checkbox.addEventListener("change", async () => {
         checkbox.disabled = true;
         try {
@@ -87,7 +108,7 @@ function renderTasks(selector, items, action) {
           await enqueue(nextAction, {
             title: item.title,
             date: item.task_date,
-          });
+          }, entityKey);
           setStatus("Η αλλαγή περιμένει συγχρονισμό με το Mac.");
           await refresh();
         } catch (error) {
@@ -98,7 +119,7 @@ function renderTasks(selector, items, action) {
       });
     }
     row.append(checkbox, element("span", "", item.title));
-    if (!item.completed && !isHistorical()) {
+    if (!item.completed && !isHistorical() && !locked) {
       const edit = element("button", "task-edit", "Επεξεργασία");
       edit.type = "button";
       edit.addEventListener("click", (event) => {
@@ -106,9 +127,19 @@ function renderTasks(selector, items, action) {
         openEdit(
           action === "complete-work-task" ? "Work" : "Personal",
           item,
+          entityKey,
         );
       });
       row.append(edit);
+    }
+    if (!isHistorical() && !locked) {
+      const remove = element("button", "task-delete", "Διαγραφή");
+      remove.type = "button";
+      remove.addEventListener("click", (event) => {
+        event.preventDefault();
+        deleteTodo(area, item, entityKey, remove);
+      });
+      row.append(remove);
     }
     container.append(row);
   }
@@ -201,37 +232,43 @@ function renderReminders(items) {
     return;
   }
   for (const item of items) {
+    const entityKey = reminderEntityKey(item);
+    const locked = pendingCommands.some(
+      (command) => command.entity_key === entityKey,
+    );
     const row = element("label", "reminder-row");
     const checkbox = element("input");
     checkbox.type = "checkbox";
-    checkbox.disabled = isHistorical();
+    checkbox.disabled = isHistorical() || locked || Boolean(item.completed);
+    if (locked) row.classList.add("pending");
     checkbox.checked = Boolean(item.completed);
-    checkbox.disabled = Boolean(item.completed);
     if (item.completed) row.classList.add("completed");
-    checkbox.addEventListener("change", async () => {
-      if (!checkbox.checked) return;
-      checkbox.disabled = true;
-      try {
-        await enqueue("complete-reminder", { id: item.id });
-        setStatus("Η ολοκλήρωση περιμένει συγχρονισμό με το Mac.");
-      } catch (error) {
-        checkbox.checked = false;
-        checkbox.disabled = false;
-        setStatus(`Αποτυχία: ${error.message}`);
-      }
-    });
+    if (!isHistorical() && !locked && !item.completed) {
+      checkbox.addEventListener("change", async () => {
+        if (!checkbox.checked) return;
+        checkbox.disabled = true;
+        try {
+          await enqueue("complete-reminder", { id: item.id }, entityKey);
+          setStatus("Η ολοκλήρωση περιμένει συγχρονισμό με το Mac.");
+        } catch (error) {
+          checkbox.checked = false;
+          checkbox.disabled = false;
+          setStatus(`Αποτυχία: ${error.message}`);
+        }
+      });
+    }
     const copy = element("div", "reminder-copy");
     copy.append(
       element("span", "", item.title),
       element("span", "item-meta", reminderDue(item.due)),
     );
     row.append(checkbox, copy);
-    if (!isHistorical()) {
+    if (!isHistorical() && !locked) {
       const edit = element("button", "reminder-edit", "Επεξεργασία");
       edit.type = "button";
       edit.addEventListener("click", (event) => {
         event.preventDefault();
-        openEdit("Reminder", item);
+        openEdit("Reminder", item, entityKey);
       });
       row.append(edit);
     }
@@ -257,7 +294,12 @@ function renderLearning(items) {
     return;
   }
   for (const item of filtered) {
+    const entityKey = `learning:${item.id}`;
+    const locked = pendingCommands.some(
+      (command) => command.entity_key === entityKey,
+    );
     const row = element("article", "learning-row");
+    if (locked) row.classList.add("pending");
     const copy = element("div", "learning-copy");
     if (item.url) {
       const link = element("a", "learning-link", item.title);
@@ -269,13 +311,13 @@ function renderLearning(items) {
       copy.append(element("strong", "", item.title));
     }
     row.append(copy);
-    if (!isHistorical()) {
+    if (!isHistorical() && !locked) {
       const remove = element("button", "learning-remove", "Αφαίρεση");
       remove.type = "button";
       remove.addEventListener("click", async () => {
         remove.disabled = true;
         try {
-          await enqueue("complete-learning", { id: item.id });
+          await enqueue("complete-learning", { id: item.id }, entityKey);
           setStatus("Η αφαίρεση περιμένει συγχρονισμό με το Mac.");
         } catch (error) {
           remove.disabled = false;
@@ -657,6 +699,19 @@ function renderSnapshot(snapshot) {
     );
   const updatedTasks = (items, action) =>
     items.flatMap((item) => {
+      const area = action === "update-work-task" ? "work" : "personal";
+      const entityKey = taskEntityKey(area, item);
+      const deleteAction =
+        area === "work" ? "delete-work-task" : "delete-personal-task";
+      if (
+        pendingCommands.some(
+          (entry) =>
+            entry.action === deleteAction &&
+            entry.entity_key === entityKey,
+        )
+      ) {
+        return [];
+      }
       const command = pendingCommands.find(
         (entry) =>
           entry.action === action &&
@@ -791,7 +846,7 @@ async function loadAvailableSnapshots() {
 async function loadPendingCommands() {
   const { data, error } = await supabase
     .from("command_center_commands")
-    .select("action,payload,status")
+    .select("action,payload,status,entity_key,created_at")
     .in("status", ["pending", "processing"]);
   if (error) throw error;
   return data ?? [];
@@ -952,23 +1007,24 @@ async function clearScratchpad() {
   renderScratchpad(null);
 }
 
-async function enqueue(action, payload) {
+async function enqueue(action, payload, entityKey = null) {
   if (isHistorical()) {
     throw new Error("Οι παλιές ημερομηνίες είναι μόνο για ανάγνωση.");
   }
   const { error } = await supabase
     .from("command_center_commands")
-    .insert({ action, payload });
+    .insert({ action, payload, entity_key: entityKey });
   if (error) throw error;
   setTimeout(refresh, 65_000);
 }
 
-function openEdit(kind, item) {
+function openEdit(kind, item, entityKey = "") {
   $("#edit-kind").value = kind;
   $("#edit-id").value = item.id ?? "";
   $("#edit-old-title").value = item.title;
   $("#edit-current-date").value =
     item.task_date ?? item.due?.slice(0, 10) ?? "";
+  $("#edit-entity-key").value = entityKey;
   $("#edit-title").value = item.title;
   $("#edit-date").value =
     item.task_date ??
@@ -998,7 +1054,7 @@ async function saveEdit(event) {
         ? "update-work-task"
         : "update-personal-task";
   try {
-    await enqueue(action, payload);
+    await enqueue(action, payload, $("#edit-entity-key").value || null);
     $("#edit-dialog").close();
     setStatus("Η ενημέρωση περιμένει συγχρονισμό με το Mac.");
     await refresh();
@@ -1006,6 +1062,23 @@ async function saveEdit(event) {
     setStatus(`Αποτυχία επεξεργασίας: ${error.message}`);
   } finally {
     button.disabled = false;
+  }
+}
+
+async function deleteTodo(area, item, entityKey, button) {
+  if (!window.confirm(`Να διαγραφεί το todo «${item.title}»;`)) return;
+  button.disabled = true;
+  try {
+    await enqueue(
+      area === "work" ? "delete-work-task" : "delete-personal-task",
+      { title: item.title, date: item.task_date },
+      entityKey,
+    );
+    setStatus("Η διαγραφή περιμένει συγχρονισμό με το Mac.");
+    await refresh();
+  } catch (error) {
+    button.disabled = false;
+    setStatus(`Αποτυχία διαγραφής: ${error.message}`);
   }
 }
 
@@ -1099,7 +1172,7 @@ async function deleteAgendaItem(item, button) {
       uid: item.uid,
       title: item.title,
       ref: item.command_center_ref,
-    });
+    }, `agenda:${item.kind}:${item.calendar}:${item.uid}`);
     setStatus("Η διαγραφή περιμένει συγχρονισμό με το Mac.");
     await refresh();
   } catch (error) {
@@ -1116,7 +1189,7 @@ async function archiveProjectNote(project, note, button) {
       project: project.name,
       id: note.id,
       title: note.text,
-    });
+    }, `project-note:${project.name}:${note.id}`);
     setStatus("Η διαγραφή περιμένει συγχρονισμό με το Mac.");
     await refresh();
     openProject(project);

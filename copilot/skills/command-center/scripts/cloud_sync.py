@@ -342,6 +342,22 @@ def command_arguments(command: dict[str, Any]) -> tuple[str, ...]:
             "--date",
             task_date,
         )
+    if action == "delete-personal-task":
+        return (
+            "task-delete",
+            "--query",
+            title,
+            "--date",
+            task_date,
+        )
+    if action == "delete-work-task":
+        return (
+            "work-task-delete",
+            "--query",
+            title,
+            "--date",
+            task_date,
+        )
     if action == "update-personal-task":
         return (
             "task-update",
