@@ -15,7 +15,7 @@ local apps = {
     r = "Discord",       -- ⌥R  Discord
     a = "Viber",         -- ⌥A  Viber
     v = "WhatsApp",      -- ⌥V  WhatsApp
-    z = "Obsidian",      -- ⌥Z  Obsidian
+    z = "Pyxida",        -- ⌥Z  Pyxida
     f = "Spotify",       -- ⌥F  Spotify
 }
 
