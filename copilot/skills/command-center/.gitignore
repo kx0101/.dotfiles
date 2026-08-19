@@ -1,7 +1,0 @@
-.DS_Store
-**/__pycache__/
-*.py[cod]
-cloud/node_modules/
-cloud/dist/
-cloud/.env*
-cloud/.vercel/

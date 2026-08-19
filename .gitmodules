@@ -1,0 +1,4 @@
+[submodule "copilot/skills/command-center"]
+	path = copilot/skills/command-center
+	url = https://github.com/kx0101/pyxida.git
+	branch = main
