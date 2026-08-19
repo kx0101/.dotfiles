@@ -195,6 +195,10 @@ Deleting a parent recursively soft-deletes all descendants before the parent.
 Daily rollover merges missing incomplete lines into an existing target note as
 well as creating new notes. A file created early by rescheduling must not block
 the next day's carry-forward.
+Carry-over inclusion is decided per root subtree: one unchecked node keeps the
+whole non-deleted subtree and its exact checked/unchecked states. Only an
+all-checked subtree is removed. Reconciliation applies the same rule to a
+pre-existing target file.
 
 The sync panel shows current snapshot time and pending/processing/failed counts.
 Successful mutations append audit events with `cli`, `local-web`, or `vercel`

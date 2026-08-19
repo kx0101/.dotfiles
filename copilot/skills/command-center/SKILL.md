@@ -155,10 +155,13 @@ undated Work inbox tasks. Dated Work tasks live in the matching Work Daily Note.
 
 Daily task files are generated per date under
 `Command Center/Daily Tasks/<N. Month YYYY>/` for Personal and
-`Work/Daily Notes/<N. Month YYYY>/` for Work. `daily-rollover` carries only
-incomplete, deduplicated items from the previous date and never overwrites an
-existing file. The morning briefing shows today's daily files, Work leaf tasks,
-and a single Work Next item; historical Work tasks are not dumped into today's
+`Work/Daily Notes/<N. Month YYYY>/` for Work. `daily-rollover` evaluates each
+root subtree as a whole. If any non-deleted node is unchecked, it carries the
+entire subtree and preserves every checkbox state; it drops the subtree only
+when every node is checked. A checked standalone leaf is therefore dropped.
+Rollover deduplicates and merges without overwriting unrelated target-day
+items. The morning briefing shows today's daily files, Work leaf tasks, and a
+single Work Next item; historical Work tasks are not dumped into today's
 briefing.
 
 After a mutation, reply with one line stating the normalized title and changed

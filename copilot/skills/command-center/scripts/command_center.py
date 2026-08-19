@@ -3546,28 +3546,21 @@ def open_daily_lines(path: Path) -> list[str]:
     if not path.is_file():
         return []
     entries = daily_task_entries(path)
-    open_paths = {
-        entry["path_key"]
+    active_roots = {
+        entry["path_key"][:1]
         for entry in entries
         if not entry["completed"] and not entry["deleted"]
     }
     carried: list[str] = []
     seen: set[tuple[str, ...]] = set()
     for entry in entries:
-        has_open_descendant = any(
-            len(path_key) > len(entry["path_key"])
-            and path_key[: len(entry["path_key"])] == entry["path_key"]
-            for path_key in open_paths
-        )
         if (
             entry["deleted"]
-            or (entry["completed"] and not has_open_descendant)
+            or entry["path_key"][:1] not in active_roots
             or entry["path_key"] in seen
         ):
             continue
         line = CALENDAR_METADATA_PATTERN.sub("", entry["raw"]).rstrip()
-        if entry["completed"]:
-            line = re.sub(r"\[[xX]\]", "[ ]", line, count=1)
         carried.append(line)
         seen.add(entry["path_key"])
     return carried
@@ -3596,10 +3589,36 @@ def merge_daily_lines(
             for line in lines
             if (identity := daily_line_identity(line))
         }
-        inserted = 0
+        changed = 0
         for carried_index, carried_line in enumerate(carried_lines):
             identity = daily_line_identity(carried_line)
-            if not identity or identity in existing:
+            if not identity:
+                continue
+            if identity in existing:
+                source_match = DAILY_TASK_PATTERN.match(carried_line)
+                target_index = next(
+                    (
+                        index
+                        for index, line in enumerate(lines)
+                        if daily_line_identity(line) == identity
+                    ),
+                    None,
+                )
+                if source_match is None or target_index is None:
+                    continue
+                target_match = DAILY_TASK_PATTERN.match(lines[target_index])
+                if (
+                    target_match is not None
+                    and target_match.group("state").lower()
+                    != source_match.group("state").lower()
+                ):
+                    lines[target_index] = re.sub(
+                        r"\[[ xX]\]",
+                        f"[{source_match.group('state')}]",
+                        lines[target_index],
+                        count=1,
+                    )
+                    changed += 1
                 continue
             carried_indent = (
                 len(carried_line) - len(carried_line.lstrip(" \t"))
@@ -3651,11 +3670,11 @@ def merge_daily_lines(
                 )
             lines.insert(insertion, carried_line)
             existing.add(identity)
-            inserted += 1
-        if not inserted:
+            changed += 1
+        if not changed:
             return 0
         atomic_write(path, "\n".join(lines).rstrip() + "\n")
-    return inserted
+    return changed
 
 
 def daily_task_entries(path: Path) -> list[dict[str, Any]]:
@@ -3699,25 +3718,25 @@ def remove_completed_carryovers(source: Path, target: Path) -> int:
     if not source.is_file() or not target.is_file():
         return 0
     source_entries = daily_task_entries(source)
-    open_paths = {
-        entry["path_key"]
+    active_roots = {
+        entry["path_key"][:1]
         for entry in source_entries
         if not entry["completed"] and not entry["deleted"]
     }
-    completed_paths = {
+    carried_paths = {
         entry["path_key"]
         for entry in source_entries
-        if entry["completed"]
-        and not any(
-            len(path_key) > len(entry["path_key"])
-            and path_key[: len(entry["path_key"])] == entry["path_key"]
-            for path_key in open_paths
-        )
+        if not entry["deleted"] and entry["path_key"][:1] in active_roots
+    }
+    removed_paths = {
+        entry["path_key"]
+        for entry in source_entries
+        if entry["path_key"] not in carried_paths
     }
     removable = [
         entry["line_number"]
         for entry in daily_task_entries(target)
-        if not entry["completed"] and entry["path_key"] in completed_paths
+        if entry["path_key"] in removed_paths
     ]
     if not removable:
         return 0
