@@ -54,10 +54,10 @@ preserve an optional local time as `YYYY-MM-DDTHH:mm`.
 
 The browser sends each proposal to the existing Mac command queue only after the
 owner presses Execute. A newer chat turn supersedes older unexecuted proposals.
-Chat history stays in browser local storage. The last 8 messages plus only the
-relevant approved calendar, project, task, Reminder, Agenda, Learning, and
-project-note metadata are sent ephemerally to OpenAI and are not written to the
-snapshot or vault.
+Chat history stays in browser local storage. The browser sends only the last 8
+messages and selected date. The function loads the owner snapshot through
+Supabase RLS, selects relevant metadata, and sends that ephemeral context to
+OpenAI. It is not written back to the snapshot or vault.
 Work data is limited to task title/date/status metadata; Work note content is
 excluded.
 
@@ -80,8 +80,9 @@ python3 ../scripts/install_cloud_sync.py
 ```
 
 The configuration command prompts for the service role key and stores all sync
-configuration in macOS Keychain. The LaunchAgent polls allowlisted commands and
-publishes the approved snapshot every 60 seconds.
+configuration in macOS Keychain. The installer creates three locked jobs:
+commands every 10 seconds, core snapshots every 60 seconds, and cached provider
+enrichment every 10 minutes.
 
 Apple Health setup is optional:
 

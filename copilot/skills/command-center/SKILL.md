@@ -42,18 +42,17 @@ Timed Calendar events receive one local Command Center notification 15 minutes
 before their start. Show the event in local Greek time and include its Google
 Meet URL when Calendar exposes one. The reminder watcher deduplicates by calendar,
 title, and start time.
+Daily native and web briefings consume the shared Python briefing contract;
+presentation adapters do not independently choose sections or task inclusion.
 
-## Local web dashboard
+## Dashboard behavior
 
-The dashboard is available only at `http://127.0.0.1:4317`. It opens
-with Morning, preserves the Work task tree, and shows Agenda, Personal tasks,
-health, pending Learning, recent mail from `liakos.koulaxis@yahoo.com`, and
-lifecycle-sorted projects. Personal and Work sections have local visibility
-preferences. Project cards open operational details for tasks, health, GitHub, and BookIt
-business activity. Its browser interface must use CLI-backed
-endpoints and render local tasks/projects before slower Agenda and health
-integrations complete. It must never access the vault, Keychain, Calendar, Mail,
-or provider integrations directly.
+The Vercel dashboard preserves the Work task tree and shows Agenda, Personal
+tasks, health, pending Learning, recent mail metadata, and lifecycle-sorted
+projects. Personal and Work sections have visibility preferences. Project cards
+open operational details for tasks, health, GitHub, and BookIt business activity.
+The browser reads owner-only Supabase snapshots and never accesses the vault,
+Keychain, Calendar, Mail, or provider integrations directly.
 
 The dashboard may add and complete Personal or Work tasks through same-origin,
 JSON-only POST actions. Route Personal through `task-add`/`task-complete` so
@@ -70,7 +69,9 @@ has a pending/processing cloud command.
 Keep offline Vercel additions visible from the command queue until the Mac sync
 agent writes them. Show every pending/processing command in the top queue, and
 overlay Calendar additions on the matching Agenda date. Cloud sync runs are
-serialized by the agent lock.
+serialized at the mutation/publication seam by one lock. Slow provider reads run
+outside it. Commands run every 10 seconds, core snapshots every minute, and
+provider enrichment every 10 minutes from a local cache.
 
 The Learning panel has separate Books, Articles, and Videos views. Additions must
 use `learning-add`; removal from the pending view must use `learning-complete`,

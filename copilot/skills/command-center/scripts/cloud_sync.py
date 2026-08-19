@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import fcntl
@@ -14,6 +15,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from briefing_contract import build_daily_briefing
+
 
 ROOT = Path(__file__).resolve().parent
 COMMAND = ROOT / "command_center.py"
@@ -23,6 +26,13 @@ LOCK_PATH = (
     / "Application Support"
     / "Command Center"
     / "cloud-sync.lock"
+)
+ENRICHMENT_CACHE = (
+    Path.home()
+    / "Library"
+    / "Application Support"
+    / "Command Center"
+    / "cloud-enrichment.json"
 )
 UUID_PATTERN = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
@@ -116,7 +126,71 @@ def request_json(
     return json.loads(content) if content else None
 
 
-def snapshot() -> dict[str, Any]:
+def load_enrichment() -> dict[str, Any]:
+    defaults = {
+        "system_health": [],
+        "mail": [],
+        "github": {},
+        "bookit_business": {},
+        "bookit_emails": {},
+        "enrichment_updated_at": None,
+        "enrichment_errors": {},
+    }
+    if not ENRICHMENT_CACHE.is_file():
+        return defaults
+    try:
+        value = json.loads(ENRICHMENT_CACHE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return defaults
+    return {**defaults, **value}
+
+
+def save_enrichment(value: dict[str, Any]) -> None:
+    ENRICHMENT_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    temporary = ENRICHMENT_CACHE.with_name(
+        f"{ENRICHMENT_CACHE.name}.{os.getpid()}.tmp"
+    )
+    temporary.write_text(
+        json.dumps(value, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(ENRICHMENT_CACHE)
+
+
+def refresh_enrichment() -> dict[str, Any]:
+    value = load_enrichment()
+    errors: dict[str, str] = {}
+    operations = {
+        "system_health": lambda: run_cli("project-health")["checks"],
+        "mail": lambda: run_cli(
+            "mail",
+            "--account",
+            "liakos.koulaxis@yahoo.com",
+        )["messages"],
+        "github": lambda: run_cli("github"),
+        "bookit_business": lambda: run_cli("bookit-business"),
+        "bookit_emails": lambda: run_cli(
+            "resend-emails",
+            "--name",
+            "BookIt",
+            "--limit",
+            "5",
+        ),
+    }
+    for name, operation in operations.items():
+        try:
+            value[name] = operation()
+        except (KeyError, RuntimeError, OSError) as exc:
+            errors[name] = str(exc)[:500]
+    value["enrichment_updated_at"] = datetime.now().astimezone().isoformat(
+        timespec="seconds"
+    )
+    value["enrichment_errors"] = errors
+    save_enrichment(value)
+    return value
+
+
+def snapshot(enrichment: dict[str, Any] | None = None) -> dict[str, Any]:
     daily = run_cli("daily-tasks", "--include-completed")
     reminders = run_cli("reminder-list", "--list", "Reminders")
     learning = run_cli("learning-list")
@@ -124,21 +198,7 @@ def snapshot() -> dict[str, Any]:
     agenda = run_cli("calendar-today")
     calendar_plan = run_cli("calendar-range", "--days", "31")
     calendars = run_cli("calendar-list")
-    system_health = run_cli("project-health")
-    mail = run_cli(
-        "mail",
-        "--account",
-        "liakos.koulaxis@yahoo.com",
-    )
-    github = run_cli("github")
-    bookit_business = run_cli("bookit-business")
-    bookit_emails = run_cli(
-        "resend-emails",
-        "--name",
-        "BookIt",
-        "--limit",
-        "5",
-    )
+    overdue = run_cli("task-list", "--view", "overdue")
     audit = run_cli("audit-list", "--limit", "100")
     scratchpad = run_cli("scratchpad-get")
     today = datetime.now().astimezone().date()
@@ -189,7 +249,13 @@ def snapshot() -> dict[str, Any]:
                 ],
             }
         )
-    return {
+    enrichment = enrichment or load_enrichment()
+    today_reminders = [
+        item
+        for item in reminders["reminders"]
+        if item.get("due", "")[:10] == today.isoformat()
+    ]
+    payload = {
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "personal_tasks": daily["personal"],
         "work_tasks": daily["work"],
@@ -200,22 +266,35 @@ def snapshot() -> dict[str, Any]:
         "calendar_plan": calendar_plan["events"],
         "daily_plans": daily_plans,
         "calendars": calendars["calendars"],
-        "system_health": system_health["checks"],
-        "mail": mail["messages"],
-        "github": github,
-        "bookit_business": bookit_business,
-        "bookit_emails": bookit_emails,
+        "system_health": enrichment["system_health"],
+        "mail": enrichment["mail"],
+        "github": enrichment["github"],
+        "bookit_business": enrichment["bookit_business"],
+        "bookit_emails": enrichment["bookit_emails"],
+        "enrichment_updated_at": enrichment["enrichment_updated_at"],
+        "enrichment_errors": enrichment["enrichment_errors"],
         "audit": audit["events"],
         "scratchpad": scratchpad,
     }
+    payload["briefing"] = build_daily_briefing(
+        selected_date=today.isoformat(),
+        personal=daily["personal"],
+        work=daily["work"],
+        agenda=agenda["events"],
+        reminders=today_reminders,
+        overdue=overdue["tasks"],
+        errors=enrichment["enrichment_errors"],
+    )
+    return payload
 
 
 def push_snapshot(
     base_url: str,
     service_key: str,
     user_id: str,
+    payload: dict[str, Any] | None = None,
 ) -> None:
-    payload = snapshot()
+    payload = payload or snapshot()
     now = datetime.now().astimezone()
     request_json(
         base_url,
@@ -565,7 +644,23 @@ def finalize_commands(
         )
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--mode",
+        choices=("commands", "snapshot", "enrichment", "all"),
+        default="all",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
+    args = parse_args()
+    refreshed_enrichment = (
+        refresh_enrichment()
+        if args.mode in {"enrichment", "all"}
+        else None
+    )
     LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
     with LOCK_PATH.open("a", encoding="utf-8") as lock_file:
         try:
@@ -575,15 +670,42 @@ def main() -> None:
             return
         base_url, service_key, user_id = configuration()
         applied = applied_commands(base_url, service_key, user_id)
-        processed, new_applied = process_commands(
+        processed = 0
+        if args.mode in {"commands", "all"}:
+            processed, new_applied = process_commands(
+                base_url,
+                service_key,
+                user_id,
+            )
+            applied.extend(new_applied)
+        if args.mode == "commands" and not applied:
+            print(
+                json.dumps(
+                    {
+                        "mode": args.mode,
+                        "processed": processed,
+                        "snapshot": "not_needed",
+                    }
+                )
+            )
+            return
+        enrichment = refreshed_enrichment or load_enrichment()
+        push_snapshot(
             base_url,
             service_key,
             user_id,
+            snapshot(enrichment),
         )
-        applied.extend(new_applied)
-        push_snapshot(base_url, service_key, user_id)
         finalize_commands(base_url, service_key, applied)
-        print(json.dumps({"processed": processed, "snapshot": "updated"}))
+        print(
+            json.dumps(
+                {
+                    "mode": args.mode,
+                    "processed": processed,
+                    "snapshot": "updated",
+                }
+            )
+        )
 
 
 if __name__ == "__main__":

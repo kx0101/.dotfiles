@@ -1,6 +1,8 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { z } from "zod";
+import { CHAT_ACTIONS } from "../lib/actions.js";
+import { buildChatContext } from "../lib/chat-context.js";
 import {
   inferEntitySearch,
   searchEntities,
@@ -166,28 +168,7 @@ const proposalSchema = z.discriminatedUnion("action", [
 ]);
 
 const modelProposalSchema = z.object({
-  action: z.enum([
-    "add-personal-task",
-    "add-work-task",
-    "add-reminder",
-    "add-learning",
-    "add-project-note",
-    "add-calendar-event",
-    "complete-personal-task",
-    "complete-work-task",
-    "reopen-personal-task",
-    "reopen-work-task",
-    "delete-personal-task",
-    "delete-work-task",
-    "update-personal-task",
-    "update-work-task",
-    "complete-reminder",
-    "update-reminder",
-    "delete-agenda-item",
-    "update-calendar-event",
-    "complete-learning",
-    "archive-project-note",
-  ]),
+  action: z.enum(CHAT_ACTIONS),
   title: z.string().min(1).max(1000),
   date: modelDateSchema.nullable(),
   parent_line: z.number().int().positive().nullable(),
@@ -233,6 +214,33 @@ async function authenticatedUser(request) {
   );
   if (!response.ok) return null;
   return response.json();
+}
+
+async function snapshotPayload(request, userId, selectedDate, today) {
+  const historical = selectedDate < today;
+  const table = historical
+    ? "command_center_daily_snapshots"
+    : "command_center_snapshots";
+  const params = new URLSearchParams({
+    user_id: `eq.${userId}`,
+    select: "payload",
+    limit: "1",
+  });
+  if (historical) params.set("day", `eq.${selectedDate}`);
+  const response = await fetch(
+    `${process.env.VITE_SUPABASE_URL}/rest/v1/${table}?${params}`,
+    {
+      headers: {
+        apikey: process.env.VITE_SUPABASE_ANON_KEY,
+        Authorization: request.headers.authorization,
+      },
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Snapshot lookup failed with HTTP ${response.status}.`);
+  }
+  const rows = await response.json();
+  return rows[0]?.payload ?? null;
 }
 
 function athensNow() {
@@ -805,7 +813,7 @@ export default async function handler(request, response) {
   if (!body || typeof body !== "object") {
     return json(response, 400, { error: "Μη έγκυρο JSON." });
   }
-  if (JSON.stringify(body).length > 100_000) {
+  if (JSON.stringify(body).length > 30_000) {
     return json(response, 413, { error: "Το αίτημα είναι πολύ μεγάλο." });
   }
 
@@ -825,18 +833,51 @@ export default async function handler(request, response) {
     return json(response, 400, { error: "Απαιτείται μήνυμα χρήστη." });
   }
 
-  const calendars = boundedStrings(body.context?.calendars, 50, 200);
-  const projects = boundedStrings(body.context?.projects, 50, 100);
-  const parents = boundedParents(body.context?.parents);
+  const today = athensNow().slice(0, 10);
+  const selectedDate = strictDateSchema.safeParse(
+    body.selected_date,
+  ).success
+    ? body.selected_date
+    : today;
+  let snapshot;
+  try {
+    snapshot = await snapshotPayload(
+      request,
+      user.id,
+      selectedDate,
+      today,
+    );
+  } catch (error) {
+    console.error(
+      "command_center_chat_snapshot_failed",
+      error?.message ?? "Unknown",
+    );
+    return json(response, 503, {
+      error: "Δεν μπόρεσα να φορτώσω το snapshot της Πυξίδας.",
+    });
+  }
+  if (!snapshot) {
+    return json(response, 503, {
+      error: "Δεν υπάρχει διαθέσιμο snapshot για αυτή την ημερομηνία.",
+    });
+  }
+  const context = buildChatContext(
+    snapshot,
+    selectedDate,
+    today,
+  );
+  const calendars = boundedStrings(context.calendars, 50, 200);
+  const projects = boundedStrings(context.projects, 50, 100);
+  const parents = boundedParents(context.parents);
   const personalTasks = boundedTasks(
-    body.context?.personal_tasks,
+    context.personal_tasks,
     "personal",
   );
-  const workTasks = boundedTasks(body.context?.work_tasks, "work");
-  const reminders = boundedReminders(body.context?.reminders);
-  const agenda = boundedAgenda(body.context?.agenda);
-  const learning = boundedLearning(body.context?.learning);
-  const projectNotes = boundedProjectNotes(body.context?.project_notes);
+  const workTasks = boundedTasks(context.work_tasks, "work");
+  const reminders = boundedReminders(context.reminders);
+  const agenda = boundedAgenda(context.agenda);
+  const learning = boundedLearning(context.learning);
+  const projectNotes = boundedProjectNotes(context.project_notes);
   const entityContext = {
     calendars,
     projects,
@@ -848,14 +889,9 @@ export default async function handler(request, response) {
     learning,
     projectNotes,
   };
-  const selectedDate = strictDateSchema.safeParse(
-    body.context?.selected_date,
-  ).success
-    ? body.context.selected_date
-    : athensNow().slice(0, 10);
   const searchFilters = inferEntitySearch(
     messages,
-    athensNow().slice(0, 10),
+    today,
   );
   const searchResults = searchFilters
     ? searchEntities(entityContext, searchFilters)

@@ -53,6 +53,10 @@ log "$script_dir -- $filter"
 
 cd $script_dir
 
+if git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+    execute git submodule update --init --recursive
+fi
+
 # brew before everything: most runs/* scripts call `brew install` on macOS.
 ensure_brew
 

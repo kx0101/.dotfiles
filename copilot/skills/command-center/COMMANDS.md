@@ -67,14 +67,16 @@ python3 scripts/briefing_scheduler.py weekly
 # Install macOS LaunchAgents: daily 08:30 and Monday 08:30
 python3 scripts/install_briefing_schedule.py
 
-# Install and open the localhost-only web dashboard
-python3 scripts/install_web_dashboard.py
-
 # After Supabase/GitHub OAuth setup
 python3 scripts/configure_cloud_sync.py \
   --url "https://PROJECT.supabase.co" \
   --user-id "SUPABASE_AUTH_USER_UUID"
 python3 scripts/install_cloud_sync.py
+
+# Manual cloud job runs
+python3 scripts/cloud_sync.py --mode commands
+python3 scripts/cloud_sync.py --mode snapshot
+python3 scripts/cloud_sync.py --mode enrichment
 ```
 
 `dashboard` surfaces integration failures in its `errors` object. Report them;
@@ -84,6 +86,8 @@ Scheduled briefings are stored privately under
 `~/Library/Application Support/Command Center/Briefings/`, not in the Obsidian
 vault. The morning briefing includes urgent items, calls, calendar entries,
 Reminders, and daily todos for today.
+Native morning output and the Vercel modal render the shared
+`briefing_contract.py` payload.
 Nested Work tasks include their parent path in JSON output and briefing previews.
 The native Briefing Window opens automatically after a scheduled briefing is
 generated; the notification remains available as a reminder.
@@ -92,24 +96,10 @@ notification 15 minutes before every timed Calendar event. It includes the local
 Greek time and a Google Meet URL when Calendar exposes one in the event URL or
 description.
 
-The local dashboard listens only on `http://127.0.0.1:4317`. Its LaunchAgent
-starts it at login and keeps it running. Browser code receives data through
-independent CLI-backed endpoints and never reads or edits the vault directly.
-Writes for tasks, reminders, Learning, captures, and Calendar events route through
-the CLI. Tasks remain separate from Reminders and Calendar events.
-Pending Learning items and metadata-only messages received in the last 48 hours
-by `liakos.koulaxis@yahoo.com` load in independent panels.
-Learning is grouped into Books, Articles, and Videos. Dashboard removal calls
-`learning-complete`, preserving history rather than deleting the item.
-Mail cards open the exact local message in Apple Mail. Agenda Join actions support
-Google Meet, Microsoft Teams, and Zoom URLs exposed by Calendar.
-The Reminders panel reads and mutates only the `Reminders` list. Tasks do not
-create or update Reminders.
-
 `cloud/` contains the Vercel web app and Supabase schemas. The owner-only Mac
-agent publishes the approved snapshot every 60 seconds and executes allowlisted
-Personal/Work task, Reminder, Learning, and Calendar commands. It never uploads
-Mail bodies, complete Work notes, local paths, or credentials.
+runtime executes allowlisted commands every 10 seconds, publishes core snapshots
+every 60 seconds, and refreshes cached provider enrichment every 10 minutes. It
+never uploads Mail bodies, complete Work notes, local paths, or credentials.
 
 `daily-rollover` creates:
 

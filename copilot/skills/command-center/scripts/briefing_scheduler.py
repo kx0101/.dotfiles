@@ -9,6 +9,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from briefing_contract import build_daily_briefing, render_markdown
+
 
 ROOT = Path(__file__).resolve().parent
 COMMAND = ROOT / "command_center.py"
@@ -78,20 +80,6 @@ def render_items(title: str, items: list[dict], fields: tuple[str, ...] = ()) ->
     return lines
 
 
-def render_task_tree(title: str, items: list[dict]) -> list[str]:
-    lines = [f"## {title}"]
-    seen: set[tuple[str, ...]] = set()
-    for item in items:
-        path = tuple([*(item.get("parent_path") or []), item.get("title", "")])
-        normalized = tuple(part.casefold() for part in path)
-        if normalized in seen:
-            continue
-        seen.add(normalized)
-        depth = len(item.get("parent_path") or [])
-        lines.append(f"{'  ' * depth}- {item.get('title', '')}")
-    return lines if len(lines) > 1 else lines + ["- Κανένα."]
-
-
 def event_line(event: dict) -> str:
     if event.get("all_day") == "true":
         time_label = "Ολοήμερο"
@@ -125,44 +113,24 @@ def render_agenda(events: list[dict]) -> list[str]:
 
 
 def render_morning() -> str:
-    run_command("daily-rollover", "--date", datetime.now().astimezone().date().isoformat())
-    home = run_command("home", "--include-personal", "--include-work")
-    morning = home["morning"]
-    lines = [
-        f"# Morning briefing — {datetime.now().astimezone():%Y-%m-%d}",
-        "",
-    ]
-    personal_today = home["daily_tasks"].get("personal", [])
-    work = morning.get("work") or {}
-    lines += render_items("Σήμερα — Personal", personal_today)
-    lines += render_items(
-        "Σήμερα — Work Next",
-        [work["next"]] if work.get("next") else [],
-    )
-    overdue_personal = sum(
-        task.get("relation") == "overdue" for task in morning["tasks"]
-    )
-    overdue_work = 0
-    lines += ["## Εκπρόθεσμα"]
-    if overdue_personal or overdue_work:
-        lines.append(
-            f"- {overdue_personal} Personal · {overdue_work} Work "
-            "(χωρίς επανάληψη παλιών tasks)"
-        )
-    else:
-        lines.append("- Κανένα.")
-    calendar = morning.get("calendar") or []
+    selected_date = datetime.now().astimezone().date().isoformat()
+    run_command("daily-rollover", "--date", selected_date)
+    daily = run_command("daily-tasks", "--include-completed")
+    calendar = run_command("calendar-today")["events"]
+    overdue = run_command("task-list", "--view", "overdue")["tasks"]
     reminders = [event for event in calendar if event.get("kind") == "reminder"]
-    lines += render_task_tree(
-        "Work σήμερα",
-        home["daily_tasks"].get("work", []),
+    contract = build_daily_briefing(
+        selected_date=selected_date,
+        personal=daily["personal"],
+        work=daily["work"],
+        agenda=calendar,
+        reminders=reminders,
+        overdue=overdue,
     )
-    lines += render_agenda(calendar)
-    lines += render_items("Reminders και todos", reminders)
-    if morning.get("errors"):
-        lines += ["", "## Integrations με σφάλμα"]
-        lines.extend(f"- {name}: {message}" for name, message in morning["errors"].items())
-    return "\n".join(lines) + "\n"
+    return render_markdown(
+        contract,
+        f"# Morning briefing — {selected_date}",
+    )
 
 
 def render_weekly() -> str:

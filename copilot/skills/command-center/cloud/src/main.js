@@ -1,4 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
+import { ACTION_LABELS, CHAT_ACTIONS } from "../lib/actions.js";
+import { taskEntityKey } from "../lib/entity-identity.js";
 import "./style.css";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -18,6 +20,8 @@ let selectedDate = localDate();
 let availableSnapshots = [];
 let chatMessages = [];
 let chatPending = false;
+let activeCommandTimer = null;
+let refreshing = false;
 
 function localDate(value = new Date()) {
   return new Date(value.getTime() - value.getTimezoneOffset() * 60_000)
@@ -52,16 +56,6 @@ function isFuture() {
   return selectedDate > localDate();
 }
 
-function taskEntityKey(area, item) {
-  return [
-    "task",
-    area,
-    item.path ?? "",
-    item.line_number ?? "",
-    item.task_date ?? "",
-  ].join(":");
-}
-
 function reminderEntityKey(item) {
   return `reminder:${item.id}`;
 }
@@ -85,26 +79,7 @@ function pendingActionLabel(action, payload = {}) {
   if (action === "add-calendar-event" && payload.operation === "update") {
     return "Επεξεργασία Calendar event";
   }
-  return {
-    "add-personal-task": "Personal task",
-    "add-work-task": "Work task",
-    "add-reminder": "Reminder",
-    "add-learning": "Learning",
-    "add-project-note": "Σημείωση έργου",
-    "add-calendar-event": "Calendar event",
-    "update-calendar-event": "Επεξεργασία Calendar event",
-    "complete-personal-task": "Ολοκλήρωση Personal task",
-    "complete-work-task": "Ολοκλήρωση Work task",
-    "complete-reminder": "Ολοκλήρωση Reminder",
-    "complete-learning": "Ολοκλήρωση Learning",
-    "update-personal-task": "Επεξεργασία Personal task",
-    "update-work-task": "Επεξεργασία Work task",
-    "update-reminder": "Επεξεργασία Reminder",
-    "delete-personal-task": "Διαγραφή Personal task",
-    "delete-work-task": "Διαγραφή Work task",
-    "delete-agenda-item": "Διαγραφή από Πρόγραμμα",
-    "archive-project-note": "Αρχειοθέτηση σημείωσης",
-  }[action] ?? action;
+  return ACTION_LABELS[action] ?? action;
 }
 
 function renderPendingQueue(commands) {
@@ -174,28 +149,7 @@ function saveChatHistory() {
 }
 
 function proposalLabel(action) {
-  return {
-    "add-personal-task": "Νέο Personal task",
-    "add-work-task": "Νέο Work task",
-    "add-reminder": "Νέα υπενθύμιση",
-    "add-learning": "Νέο Learning item",
-    "add-project-note": "Νέα σημείωση έργου",
-    "add-calendar-event": "Νέο συμβάν",
-    "complete-personal-task": "Ολοκλήρωση Personal task",
-    "complete-work-task": "Ολοκλήρωση Work task",
-    "reopen-personal-task": "Επαναφορά Personal task",
-    "reopen-work-task": "Επαναφορά Work task",
-    "delete-personal-task": "Διαγραφή Personal task",
-    "delete-work-task": "Διαγραφή Work task",
-    "update-personal-task": "Επεξεργασία Personal task",
-    "update-work-task": "Επεξεργασία Work task",
-    "complete-reminder": "Ολοκλήρωση υπενθύμισης",
-    "update-reminder": "Επεξεργασία υπενθύμισης",
-    "delete-agenda-item": "Διαγραφή από Πρόγραμμα",
-    "update-calendar-event": "Επεξεργασία συμβάντος",
-    "complete-learning": "Ολοκλήρωση Learning item",
-    "archive-project-note": "Αρχειοθέτηση σημείωσης έργου",
-  }[action] ?? action;
+  return ACTION_LABELS[action] ?? action;
 }
 
 function proposalDetails(proposal) {
@@ -314,83 +268,6 @@ function renderChat() {
   container.scrollTop = container.scrollHeight;
 }
 
-function chatContext() {
-  const parents = [
-    ...(snapshotPayload.personal_tasks ?? []).map((item) => ({
-      area: "personal",
-      title: item.title,
-      parent_line: item.line_number,
-      date: item.task_date,
-    })),
-  ].filter((item) => !String(item.parent_line).startsWith("pending-"));
-  const agenda = [
-    ...(snapshotPayload.agenda ?? []),
-    ...(snapshotPayload.calendar_plan ?? []),
-  ].filter(
-    (item, index, items) =>
-      items.findIndex(
-        (candidate) =>
-          candidate.uid === item.uid &&
-          candidate.calendar === item.calendar,
-      ) === index,
-  );
-  return {
-    calendars: snapshotPayload.calendars ?? [],
-    projects: (snapshotPayload.projects ?? []).map((project) => project.name),
-    parents,
-    personal_tasks: (snapshotPayload.personal_tasks ?? [])
-      .slice(0, 100)
-      .map((item) => ({
-        title: item.title,
-        date: item.task_date,
-        completed: Boolean(item.completed),
-        entity_key: taskEntityKey("personal", item),
-      })),
-    work_tasks: (snapshotPayload.work_tasks ?? [])
-      .slice(0, 100)
-      .map((item) => ({
-        title: item.title,
-        date: item.task_date,
-        completed: Boolean(item.completed),
-        entity_key: taskEntityKey("work", item),
-      })),
-    reminders: (snapshotPayload.all_reminders ?? snapshotPayload.reminders ?? [])
-      .slice(0, 100)
-      .map((item) => ({
-        id: item.id,
-        title: item.title,
-        due: item.due ?? null,
-        completed: Boolean(item.completed),
-        list: item.list ?? "Reminders",
-      })),
-    agenda: agenda.slice(0, 100).map((item) => ({
-      uid: item.uid,
-      kind: item.kind,
-      title: item.title,
-      calendar: item.calendar,
-      start: item.start,
-      end: item.end,
-      ref: item.command_center_ref ?? null,
-    })),
-    learning: (snapshotPayload.learning ?? []).slice(0, 100).map((item) => ({
-      id: item.id,
-      title: item.title,
-      kind: item.kind,
-      url: item.url ?? null,
-    })),
-    project_notes: (snapshotPayload.projects ?? [])
-      .flatMap((project) =>
-        (project.notes ?? []).map((note) => ({
-          id: note.id,
-          project: project.name,
-          title: note.text,
-        })),
-      )
-      .slice(0, 100),
-    selected_date: selectedDate,
-  };
-}
-
 async function sendChatMessage(event) {
   event.preventDefault();
   const input = $("#chat-input");
@@ -418,7 +295,7 @@ async function sendChatMessage(event) {
           role,
           content: text,
         })),
-        context: chatContext(),
+        selected_date: selectedDate,
       }),
     });
     const payload = await response.json();
@@ -457,28 +334,7 @@ async function sendChatMessage(event) {
 }
 
 async function executeProposal(message, proposal, index, button) {
-  const allowed = new Set([
-    "add-personal-task",
-    "add-work-task",
-    "add-reminder",
-    "add-learning",
-    "add-project-note",
-    "add-calendar-event",
-    "complete-personal-task",
-    "complete-work-task",
-    "reopen-personal-task",
-    "reopen-work-task",
-    "delete-personal-task",
-    "delete-work-task",
-    "update-personal-task",
-    "update-work-task",
-    "complete-reminder",
-    "update-reminder",
-    "delete-agenda-item",
-    "update-calendar-event",
-    "complete-learning",
-    "archive-project-note",
-  ]);
+  const allowed = new Set(CHAT_ACTIONS);
   if (!allowed.has(proposal.action)) {
     throw new Error("Μη επιτρεπτή ενέργεια.");
   }
@@ -1691,11 +1547,24 @@ async function enqueue(action, payload, entityKey = null) {
   if (isHistorical()) {
     throw new Error("Οι παλιές ημερομηνίες είναι μόνο για ανάγνωση.");
   }
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("command_center_commands")
-    .insert({ action, payload, entity_key: entityKey });
+    .insert({ action, payload, entity_key: entityKey })
+    .select("action,payload,status,entity_key,created_at")
+    .single();
   if (error) throw error;
-  setTimeout(refresh, 65_000);
+  if (data) {
+    pendingCommands = [
+      ...pendingCommands.filter(
+        (command) =>
+          command.entity_key !== data.entity_key ||
+          command.created_at !== data.created_at,
+      ),
+      data,
+    ];
+    renderPendingQueue(pendingCommands);
+    scheduleActiveCommandRefresh();
+  }
 }
 
 function openEdit(kind, item, entityKey = "") {
@@ -1971,9 +1840,14 @@ function briefingSection(title, items) {
     list.append(element("div", "briefing-item empty", "Κανένα."));
   } else {
     for (const item of items.slice(0, 20)) {
-      const title = typeof item === "string" ? item : item.title;
+      const title =
+        typeof item === "string"
+          ? item
+          : item.display ?? item.title;
       const depth =
-        typeof item === "string" ? 0 : Math.min(item.parent_path?.length ?? 0, 8);
+        typeof item === "string"
+          ? 0
+          : Math.min(item.depth ?? item.parent_path?.length ?? 0, 8);
       const row = element("div", "briefing-item", title);
       row.classList.add(`briefing-depth-${depth}`);
       list.append(row);
@@ -1993,28 +1867,25 @@ function showBriefing(force = false) {
     return;
   }
   const content = $("#briefing-content");
-  content.replaceChildren(
-    briefingSection(
-      "Πρόγραμμα",
-      (snapshotPayload.agenda ?? []).map(
-        (item) => `${formatTime(item.start)} · ${item.title}`,
+  const contract = snapshotPayload.briefing;
+  if (!contract || contract.selected_date !== selectedDate) {
+    content.replaceChildren(
+      briefingSection(
+        "Briefing",
+        ["Δεν υπάρχει briefing για την επιλεγμένη ημερομηνία."],
       ),
-    ),
-    briefingSection(
-      "Δουλειά",
-      (snapshotPayload.work_tasks ?? [])
-        .filter((item) => !item.completed),
-    ),
-    briefingSection(
-      "Προσωπικά",
-      (snapshotPayload.personal_tasks ?? [])
-        .filter((item) => !item.completed),
-    ),
-    briefingSection(
-      "Υπενθυμίσεις",
-      (snapshotPayload.reminders ?? []).map((item) => item.title),
-    ),
-  );
+    );
+  } else {
+    content.replaceChildren(
+      ...contract.sections
+        .filter(
+          (section) =>
+            section.items.length ||
+            !["errors", "overdue"].includes(section.key),
+        )
+        .map((section) => briefingSection(section.title, section.items)),
+    );
+  }
   const dialog = $("#briefing-dialog");
   if (!dialog.open) dialog.showModal();
 }
@@ -2023,41 +1894,65 @@ function maybeShowBriefing() {
   showBriefing(false);
 }
 
+function scheduleActiveCommandRefresh() {
+  clearTimeout(activeCommandTimer);
+  activeCommandTimer = null;
+  if (
+    !session ||
+    isHistorical() ||
+    !pendingCommands.length
+  ) {
+    return;
+  }
+  activeCommandTimer = setTimeout(() => {
+    refresh().catch((error) => {
+      setStatus(`Αποτυχία ανανέωσης: ${error.message}`);
+    });
+  }, 5_000);
+}
+
 async function refresh() {
   if (!session) return;
-  setStatus("Ανανέωση…");
-  const commands = isHistorical() ? [] : await loadPendingCommands();
-  const [snapshot] = await Promise.all([
-    loadSnapshot(),
-    loadHealth(),
-    isHistorical() ? Promise.resolve() : loadScratchpad(),
-  ]);
-  pendingCommands = commands;
-  renderPendingQueue(pendingCommands);
-  renderSnapshot(snapshot);
-  if (isHistorical()) {
-    renderScratchpad(snapshot?.payload?.scratchpad ?? null);
-    $("#scratchpad").readOnly = true;
-    document.body.classList.add("history-mode");
-    $("#history-mode").textContent =
-      `Στιγμιότυπο ${formatGreekDateValue(selectedDate)}`;
-    setStatus(
-      snapshot
-        ? `Ιστορικό στιγμιότυπο ${formatGreekDateValue(selectedDate)}`
-        : `Δεν υπάρχει στιγμιότυπο για ${formatGreekDateValue(selectedDate)}`,
-    );
-  } else {
-    $("#scratchpad").readOnly = false;
-    document.body.classList.remove("history-mode");
-    $("#history-mode").textContent = isFuture()
-      ? `Προγραμματισμός ${formatGreekDateValue(selectedDate)}`
-      : "Ζωντανή προβολή";
-    if (isFuture()) {
-      setStatus(`Προγραμματισμός για ${formatGreekDateValue(selectedDate)}`);
+  if (refreshing) return;
+  refreshing = true;
+  try {
+    setStatus("Ανανέωση…");
+    const commands = isHistorical() ? [] : await loadPendingCommands();
+    const [snapshot] = await Promise.all([
+      loadSnapshot(),
+      loadHealth(),
+      isHistorical() ? Promise.resolve() : loadScratchpad(),
+    ]);
+    pendingCommands = commands;
+    renderPendingQueue(pendingCommands);
+    renderSnapshot(snapshot);
+    if (isHistorical()) {
+      renderScratchpad(snapshot?.payload?.scratchpad ?? null);
+      $("#scratchpad").readOnly = true;
+      document.body.classList.add("history-mode");
+      $("#history-mode").textContent =
+        `Στιγμιότυπο ${formatGreekDateValue(selectedDate)}`;
+      setStatus(
+        snapshot
+          ? `Ιστορικό στιγμιότυπο ${formatGreekDateValue(selectedDate)}`
+          : `Δεν υπάρχει στιγμιότυπο για ${formatGreekDateValue(selectedDate)}`,
+      );
+    } else {
+      $("#scratchpad").readOnly = false;
+      document.body.classList.remove("history-mode");
+      $("#history-mode").textContent = isFuture()
+        ? `Προγραμματισμός ${formatGreekDateValue(selectedDate)}`
+        : "Ζωντανή προβολή";
+      if (isFuture()) {
+        setStatus(`Προγραμματισμός για ${formatGreekDateValue(selectedDate)}`);
+      }
     }
+    await loadSyncStatus(snapshot);
+    maybeShowBriefing();
+  } finally {
+    refreshing = false;
+    scheduleActiveCommandRefresh();
   }
-  await loadSyncStatus(snapshot);
-  maybeShowBriefing();
 }
 
 async function updateAuth(nextSession) {
