@@ -72,7 +72,7 @@ hs.pathwatcher.new(os.getenv("HOME") .. "/.hammerspoon/", reloadConfig):start()
 hs.autoLaunch(true)
 
 -- Ctrl+W = delete the previous word everywhere EXCEPT Ghostty and the Dev Box.
--- The Dev Box handles Right Ctrl+W inside Windows via AutoHotkey.
+-- The Dev Box handles logical Right Ctrl+W inside Windows via AutoHotkey.
 -- Chromium browsers ignore ~/Library/KeyBindings and macOS has no global
 -- Ctrl+W word-delete, so translate it to Option+Delete (the native
 -- delete-word), which native fields, browser inputs and browser rich-text
@@ -165,7 +165,7 @@ local EVENT_SOURCE_USER_DATA = hs.eventtap.event.properties.eventSourceUserData
 
 -- Mission Control reserves Ctrl+Left/Right for switching macOS Spaces. In the
 -- Dev Box, swallow that global shortcut and post the same event directly to
--- Windows App so both Ctrl keys navigate by word instead.
+-- Windows App so Ctrl+Arrow navigates by word instead.
 devBoxCtrlArrowTap = hs.eventtap.new({
     hs.eventtap.event.types.keyDown,
     hs.eventtap.event.types.keyUp,
@@ -191,17 +191,26 @@ devBoxCtrlArrowTap = hs.eventtap.new({
 end)
 devBoxCtrlArrowTap:start()
 
--- Left Ctrl acts as Command in macOS, but as Ctrl in the Dev Box. Right Ctrl
--- remains Ctrl everywhere. Apply the mapping at the HID layer because Windows
--- App reads modifiers before Hammerspoon can rewrite individual key events.
+-- Left Ctrl acts as Command in macOS, but as Ctrl in the Dev Box. In the Dev
+-- Box, physical Right Ctrl and the Windows key are swapped so Right Ctrl is the
+-- Windows key and the physical Windows key is Ctrl. Apply the mapping at the
+-- HID layer because Windows App reads modifiers before Hammerspoon can rewrite.
 local KINESIS_MATCHING = '{"VendorID":0x29EA,"ProductID":0x362}'
 local KINESIS_LEFT_SWAP = '{"UserKeyMapping":['
     .. '{"HIDKeyboardModifierMappingSrc":0x7000000E0,'
     .. '"HIDKeyboardModifierMappingDst":0x7000000E3},'
     .. '{"HIDKeyboardModifierMappingSrc":0x7000000E3,'
     .. '"HIDKeyboardModifierMappingDst":0x7000000E0}]}'
-local KINESIS_NATIVE_MAPPING = '{"UserKeyMapping":[]}'
+local KINESIS_DEVBOX_WINDOWS_CTRL_SWAP = '{"UserKeyMapping":['
+    .. '{"HIDKeyboardModifierMappingSrc":0x7000000E4,'
+    .. '"HIDKeyboardModifierMappingDst":0x7000000E3},'
+    .. '{"HIDKeyboardModifierMappingSrc":0x7000000E3,'
+    .. '"HIDKeyboardModifierMappingDst":0x7000000E4}]}'
 local KINESIS_OPTION_SPACE_MAPPING = '{"UserKeyMapping":['
+    .. '{"HIDKeyboardModifierMappingSrc":0x7000000E4,'
+    .. '"HIDKeyboardModifierMappingDst":0x7000000E3},'
+    .. '{"HIDKeyboardModifierMappingSrc":0x7000000E3,'
+    .. '"HIDKeyboardModifierMappingDst":0x7000000E4},'
     .. '{"HIDKeyboardModifierMappingSrc":0x70000002C,'
     .. '"HIDKeyboardModifierMappingDst":0x7000000E1}]}'
 local kinesisMappingTask = nil
@@ -214,7 +223,7 @@ local function applyKinesisMapping(inDevBox, optionHeld)
     local mapping = KINESIS_LEFT_SWAP
     if inDevBox then
         mapping = optionHeld and KINESIS_OPTION_SPACE_MAPPING
-            or KINESIS_NATIVE_MAPPING
+            or KINESIS_DEVBOX_WINDOWS_CTRL_SWAP
     end
 
     if kinesisMappingTask ~= nil and kinesisMappingTask:isRunning() then
