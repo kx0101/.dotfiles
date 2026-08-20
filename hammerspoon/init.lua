@@ -16,7 +16,6 @@ local apps = {
     a = "Viber",         -- ⌥A  Viber
     v = "WhatsApp",      -- ⌥V  WhatsApp
     z = "Pyxida",        -- ⌥Z  Pyxida
-    m = "Windows App",   -- ⌥M  Windows App
     f = "Spotify",       -- ⌥F  Spotify
 }
 
@@ -25,6 +24,34 @@ for key, appName in pairs(apps) do
         hs.application.launchOrFocus(appName)
     end)
 end
+
+local WINDOWS_APP_BID = "com.microsoft.rdc.macos"
+local KEYCODE_M = 46
+
+local function focusDevBox()
+    local app = hs.application.get(WINDOWS_APP_BID)
+    if app == nil then
+        hs.application.launchOrFocusByBundleID(WINDOWS_APP_BID)
+        return
+    end
+
+    local window = app:mainWindow()
+    if window ~= nil and window:isMinimized() then
+        window:unminimize()
+    end
+
+    -- Let the Option chord finish before activating the fullscreen window.
+    hs.timer.doAfter(0.15, function()
+        app:activate(true)
+        if window ~= nil then
+            window:raise()
+            window:focus()
+        end
+    end)
+end
+
+-- Use the physical M key so the shortcut also works with the Greek layout.
+hs.hotkey.bind(mod, KEYCODE_M, focusDevBox)
 
 -- Reload config manually (⌥⌃R) and automatically when this file changes.
 hs.hotkey.bind({ "alt", "ctrl" }, "r", function()
@@ -44,7 +71,8 @@ hs.pathwatcher.new(os.getenv("HOME") .. "/.hammerspoon/", reloadConfig):start()
 -- Launch at login so the ⌥ shortcuts are always available after a reboot.
 hs.autoLaunch(true)
 
--- Ctrl+W = delete the previous word everywhere EXCEPT the terminal.
+-- Ctrl+W = delete the previous word everywhere EXCEPT Ghostty and the Dev Box.
+-- The Dev Box handles Right Ctrl+W inside Windows via AutoHotkey.
 -- Chromium browsers ignore ~/Library/KeyBindings and macOS has no global
 -- Ctrl+W word-delete, so translate it to Option+Delete (the native
 -- delete-word), which native fields, browser inputs and browser rich-text
@@ -60,17 +88,24 @@ hs.autoLaunch(true)
 -- that force-restarts the tap.
 local GHOSTTY_BID = "com.mitchellh.ghostty"
 
--- Cache whether Ghostty is focused so the keyDown callback stays cheap; a slow
--- callback is what trips the macOS tap-disable timeout in the first place.
-local function isGhosttyFront()
+-- Cache the focused app so the keyDown callback stays cheap; a slow callback is
+-- what trips the macOS tap-disable timeout.
+local ghosttyFocused = false
+local devBoxFocused = false
+
+local function refreshCtrlWFocus()
     local app = hs.application.frontmostApplication()
-    return app ~= nil and app:bundleID() == GHOSTTY_BID
+    local bundleID = app and app:bundleID()
+    ghosttyFocused = bundleID == GHOSTTY_BID
+    devBoxFocused = bundleID == WINDOWS_APP_BID
 end
-local ghosttyFocused = isGhosttyFront()
+refreshCtrlWFocus()
 
 ghosttyFocusWatcher = hs.application.watcher.new(function(_, event, app)
     if event == hs.application.watcher.activated then
-        ghosttyFocused = (app ~= nil and app:bundleID() == GHOSTTY_BID)
+        local bundleID = app and app:bundleID()
+        ghosttyFocused = bundleID == GHOSTTY_BID
+        devBoxFocused = bundleID == WINDOWS_APP_BID
     end
 end)
 ghosttyFocusWatcher:start()
@@ -104,7 +139,7 @@ end)
 ctrlTrackTap:start()
 
 ctrlWTap = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, function(e)
-    if ghosttyFocused then
+    if ghosttyFocused or devBoxFocused then
         return false
     end
     local f = e:getFlags()
@@ -123,29 +158,108 @@ ctrlWTap = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, function(e)
 end)
 ctrlWTap:start()
 
--- After sleep the Kinesis USB keyboard re-enumerates and DROPS its hidutil
--- Ctrl<->Cmd swap, so the key that should send Ctrl sends Cmd and Ctrl+W (plus
--- every other Ctrl chord) breaks outside Ghostty. The LaunchAgent only redoes
--- the swap on its StartInterval, leaving a gap. Re-apply it immediately on wake
--- by kickstarting that same LaunchAgent (single source of truth for the mapping),
--- and re-assert the Ctrl+W hotkey for whatever app is now focused.
--- Use hs.task (not hs.execute with a login shell, which sources ~/.zshrc and can
--- time out); resolve the uid once via a fast non-login shell.
-local KINESIS_SWAP_AGENT = "com.kx0101.kinesis-ctrl-cmd-swap"
-local uid = (hs.execute("id -u") or "501"):gsub("%s+", "")
+local KEYCODE_LEFT = 123
+local KEYCODE_RIGHT = 124
+local CTRL_ARROW_EVENT_MARKER = 0x4B583031
+local EVENT_SOURCE_USER_DATA = hs.eventtap.event.properties.eventSourceUserData
 
-local function reapplyKinesisSwap()
-    hs.task.new("/bin/launchctl", nil,
-        { "kickstart", "-k", "gui/" .. uid .. "/" .. KINESIS_SWAP_AGENT }):start()
+-- Mission Control reserves Ctrl+Left/Right for switching macOS Spaces. In the
+-- Dev Box, swallow that global shortcut and post the same event directly to
+-- Windows App so both Ctrl keys navigate by word instead.
+devBoxCtrlArrowTap = hs.eventtap.new({
+    hs.eventtap.event.types.keyDown,
+    hs.eventtap.event.types.keyUp,
+}, function(event)
+    if event:getProperty(EVENT_SOURCE_USER_DATA) == CTRL_ARROW_EVENT_MARKER then
+        return false
+    end
+
+    local keycode = event:getKeyCode()
+    local isArrow = keycode == KEYCODE_LEFT or keycode == KEYCODE_RIGHT
+    if not devBoxFocused or not isArrow or not event:getFlags().ctrl then
+        return false
+    end
+
+    local app = hs.application.get(WINDOWS_APP_BID)
+    if app == nil then
+        return false
+    end
+
+    event:setProperty(EVENT_SOURCE_USER_DATA, CTRL_ARROW_EVENT_MARKER)
+    event:post(app)
+    return true
+end)
+devBoxCtrlArrowTap:start()
+
+-- Left Ctrl acts as Command in macOS, but as Ctrl in the Dev Box. Right Ctrl
+-- remains Ctrl everywhere. Apply the mapping at the HID layer because Windows
+-- App reads modifiers before Hammerspoon can rewrite individual key events.
+local KINESIS_MATCHING = '{"VendorID":0x29EA,"ProductID":0x362}'
+local KINESIS_LEFT_SWAP = '{"UserKeyMapping":['
+    .. '{"HIDKeyboardModifierMappingSrc":0x7000000E0,'
+    .. '"HIDKeyboardModifierMappingDst":0x7000000E3},'
+    .. '{"HIDKeyboardModifierMappingSrc":0x7000000E3,'
+    .. '"HIDKeyboardModifierMappingDst":0x7000000E0}]}'
+local KINESIS_NATIVE_MAPPING = '{"UserKeyMapping":[]}'
+local KINESIS_OPTION_SPACE_MAPPING = '{"UserKeyMapping":['
+    .. '{"HIDKeyboardModifierMappingSrc":0x70000002C,'
+    .. '"HIDKeyboardModifierMappingDst":0x7000000E1}]}'
+local kinesisMappingTask = nil
+
+local function applyKinesisMapping(inDevBox, optionHeld)
+    if inDevBox == nil then
+        local app = hs.application.frontmostApplication()
+        inDevBox = app ~= nil and app:bundleID() == WINDOWS_APP_BID
+    end
+    local mapping = KINESIS_LEFT_SWAP
+    if inDevBox then
+        mapping = optionHeld and KINESIS_OPTION_SPACE_MAPPING
+            or KINESIS_NATIVE_MAPPING
+    end
+
+    if kinesisMappingTask ~= nil and kinesisMappingTask:isRunning() then
+        kinesisMappingTask:terminate()
+    end
+    kinesisMappingTask = hs.task.new("/usr/bin/hidutil", nil,
+        { "property", "--matching", KINESIS_MATCHING, "--set", mapping })
+    kinesisMappingTask:start()
 end
+
+kinesisFocusWatcher = hs.application.watcher.new(function(_, event, app)
+    if event == hs.application.watcher.activated then
+        applyKinesisMapping(app ~= nil and app:bundleID() == WINDOWS_APP_BID)
+    end
+end)
+kinesisFocusWatcher:start()
+applyKinesisMapping()
+
+local LEFT_OPTION_KEYCODE = 58
+local RIGHT_OPTION_KEYCODE = 61
+
+-- Windows App does not forward Option+Space. While Option is held in the Dev
+-- Box, map the physical Space key to Shift so RDP receives native Alt+Shift.
+devBoxOptionSpaceTap = hs.eventtap.new({
+    hs.eventtap.event.types.flagsChanged,
+}, function(event)
+    if not devBoxFocused then
+        return false
+    end
+
+    local keycode = event:getKeyCode()
+    if keycode == LEFT_OPTION_KEYCODE or keycode == RIGHT_OPTION_KEYCODE then
+        applyKinesisMapping(true, event:getFlags().alt == true)
+    end
+    return false
+end)
+devBoxOptionSpaceTap:start()
 
 wakeWatcher = hs.caffeinate.watcher.new(function(event)
     local w = hs.caffeinate.watcher
     if event == w.systemDidWake
         or event == w.screensDidWake
         or event == w.sessionDidBecomeActive then
-        reapplyKinesisSwap()
-        ghosttyFocused = isGhosttyFront()
+        applyKinesisMapping()
+        refreshCtrlWFocus()
     end
 end)
 wakeWatcher:start()
@@ -160,8 +274,8 @@ kinesisUsbWatcher = hs.usb.watcher.new(function(d)
         -- exists and is lost. Retry across a ~16s window; reapply is idempotent.
         for _, delay in ipairs({ 1.5, 3, 5, 7, 10, 13, 16 }) do
             hs.timer.doAfter(delay, function()
-                reapplyKinesisSwap()
-                ghosttyFocused = isGhosttyFront()
+                applyKinesisMapping()
+                refreshCtrlWFocus()
             end)
         end
     end
@@ -184,6 +298,12 @@ local langArmed = false
 local langOtherKey = false
 
 langFlagTap = hs.eventtap.new({ hs.eventtap.event.types.flagsChanged }, function(e)
+    if devBoxFocused then
+        langArmed = false
+        langOtherKey = false
+        return false
+    end
+
     local f = e:getFlags()
     local pureAltShift = f.alt and f.shift and not f.cmd and not f.ctrl and not f.fn
     if pureAltShift then
@@ -206,6 +326,12 @@ langFlagTap = hs.eventtap.new({ hs.eventtap.event.types.flagsChanged }, function
 end)
 
 langKeyTap = hs.eventtap.new({ hs.eventtap.event.types.keyDown }, function(e)
+    if devBoxFocused then
+        langArmed = false
+        langOtherKey = false
+        return false
+    end
+
     if langArmed then
         langOtherKey = true
     end
@@ -221,7 +347,14 @@ langKeyTap:start()
 -- they keep firing. Their callbacks are fast (Ctrl+W defers its slow work), so a
 -- missed event during the sub-millisecond restart is harmless.
 eventTapWatchdog = hs.timer.doEvery(5, function()
-    for _, tap in ipairs({ ctrlWTap, ctrlTrackTap, langFlagTap, langKeyTap }) do
+    for _, tap in ipairs({
+        ctrlWTap,
+        ctrlTrackTap,
+        langFlagTap,
+        langKeyTap,
+        devBoxOptionSpaceTap,
+        devBoxCtrlArrowTap,
+    }) do
         if tap then
             tap:stop()
             tap:start()
