@@ -20,8 +20,47 @@ vim.opt.undodir = vim.fn.stdpath("state") .. "/undodir"
 
 -- vim.opt.guicursor = "n-v-c:block-Cursor,i:ver25-CursorInsert"
 vim.opt.guicursor = "n-v-c:block-Cursor,i:block-CursorInsert"
+
+local black_background_groups = {
+    "Normal",
+    "NormalNC",
+    "NormalFloat",
+    "SignColumn",
+    "FoldColumn",
+    "EndOfBuffer",
+    "LineNr",
+    "CursorLineNr",
+    "MsgArea",
+    "StatusLine",
+    "StatusLineNC",
+    "TabLine",
+    "TabLineFill",
+    "WinBar",
+    "WinBarNC",
+    "Pmenu",
+    "PmenuSbar",
+    "FloatBorder",
+    "WinSeparator",
+    "TelescopeNormal",
+    "TelescopeBorder",
+}
+
+local function apply_black_background()
+    for _, group in ipairs(black_background_groups) do
+        local ok, highlight = pcall(vim.api.nvim_get_hl, 0, {
+            name = group,
+            link = false,
+        })
+        if ok then
+            highlight.bg = 0x000000
+            vim.api.nvim_set_hl(0, group, highlight)
+        end
+    end
+end
+
 vim.api.nvim_create_autocmd("ColorScheme", {
     callback = function()
+        apply_black_background()
         vim.api.nvim_set_hl(0, "Cursor", { fg = "black", bg = "white" })
         vim.api.nvim_set_hl(0, "CursorInsert", { fg = "black", bg = "white" })
     end,
