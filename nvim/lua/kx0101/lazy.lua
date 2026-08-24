@@ -973,16 +973,36 @@ require("lazy").setup({
 
 -- Diagnostic signs (after all plugins loaded)
 local signs = {
-    Error = " ",
-    Warn  = " ",
-    Hint  = "󰠠 ",
-    Info  = " ",
+    Error = "󰅚 ",
+    Warn  = "󰀪 ",
+    Info  = "󰋽 ",
+    Hint  = "󰌶 ",
 }
 
+local function is_related_diagnostic_duplicate(diagnostic)
+    local related_information = vim.tbl_get(diagnostic, "user_data", "lsp", "relatedInformation") or {}
+    return #related_information == 1 and related_information[1].message == "original diagnostic"
+end
+
+local function hide_related_diagnostic_duplicates(diagnostic)
+    if is_related_diagnostic_duplicate(diagnostic) then
+        return nil
+    end
+
+    return diagnostic.message
+end
+
 vim.diagnostic.config({
+    float = {
+        format = hide_related_diagnostic_duplicates,
+    },
     virtual_text = {
         source = "if_many",
         prefix = function(diagnostic)
+            if is_related_diagnostic_duplicate(diagnostic) then
+                return ""
+            end
+
             if diagnostic.severity == vim.diagnostic.severity.ERROR then
                 return signs.Error
             elseif diagnostic.severity == vim.diagnostic.severity.WARN then
