@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+mkdir -p "$HOME/.local/bin"
+ln -sfn "$repo/scripts/google" "$HOME/.local/bin/google"
+
+echo "google command installed at $HOME/.local/bin/google"

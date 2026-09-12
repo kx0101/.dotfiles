@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if [[ $# -eq 0 ]]; then
+    echo "Usage: google <search terms>" >&2
+    exit 64
+fi
+
+query=$(
+    python3 - "$@" <<'PY'
+import sys
+from urllib.parse import quote_plus
+
+print(quote_plus(" ".join(sys.argv[1:])))
+PY
+)
+
+url="https://www.google.com/search?q=$query"
+
+case "$(uname -s)" in
+    Darwin) open "$url" ;;
+    Linux) xdg-open "$url" >/dev/null 2>&1 ;;
+    *)
+        echo "Unsupported operating system" >&2
+        exit 1
+        ;;
+esac
