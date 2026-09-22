@@ -195,7 +195,7 @@ devBoxCtrlArrowTap:start()
 -- Box, physical Right Ctrl and the Windows key are swapped so Right Ctrl is the
 -- Windows key and the physical Windows key is Ctrl. Apply the mapping at the
 -- HID layer because Windows App reads modifiers before Hammerspoon can rewrite.
-local KINESIS_MATCHING = '{"VendorID":0x29EA,"ProductID":0x362}'
+local KINESIS_MATCHING = '{"Product":"Adv360 Pro"}'
 local KINESIS_LEFT_SWAP = '{"UserKeyMapping":['
     .. '{"HIDKeyboardModifierMappingSrc":0x7000000E0,'
     .. '"HIDKeyboardModifierMappingDst":0x7000000E3},'
@@ -290,6 +290,14 @@ kinesisUsbWatcher = hs.usb.watcher.new(function(d)
     end
 end)
 kinesisUsbWatcher:start()
+
+-- Bluetooth reconnects create a new HID service without a USB watcher event.
+-- Re-apply infrequently using the product name shared by USB and BLE.
+kinesisMappingTimer = hs.timer.doEvery(60, function()
+    local optionHeld = devBoxFocused
+        and hs.eventtap.checkKeyboardModifiers().alt == true
+    applyKinesisMapping(nil, optionHeld)
+end)
 
 -- Option+Shift = toggle input source (ABC <-> Greek), like Windows Alt+Shift.
 -- macOS can't bind a modifier-only shortcut natively, so we watch flag changes:
