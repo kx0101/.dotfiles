@@ -8,3 +8,8 @@ $ANSIBLE_VAULT;1.1;AES256
 66383737393537336235323134316536323864633433613137383637636133303765633832373635
 61363837653761356234643336373136366661346632613734353664623634383835393139383534
 3638
+
+
+note: thanks for personally emailing me about that :D
+
+it should be safe to share since it's encrypted with Ansible Vault, provided the vault password remains secure and isn't shared alongside it (which isn't)
