@@ -191,14 +191,13 @@ devBoxCtrlArrowTap = hs.eventtap.new({
 end)
 devBoxCtrlArrowTap:start()
 
--- Left Ctrl acts as Command in macOS, but as Ctrl in the Dev Box. In the Dev
--- Box, physical Right Ctrl and the Windows key are swapped so Right Ctrl is the
--- Windows key and the physical Windows key is Ctrl. Apply the mapping at the
--- HID layer because Windows App reads modifiers before Hammerspoon can rewrite.
+-- In macOS both Kinesis thumb keys next to Option act as Ctrl (the Command
+-- key is mapped to Ctrl). In the Dev Box, physical Right Ctrl and the Windows
+-- key are swapped so Right Ctrl is the Windows key and the physical Windows key
+-- is Ctrl. Apply the mapping at the HID layer because Windows App reads
+-- modifiers before Hammerspoon can rewrite.
 local KINESIS_MATCHING = '{"Product":"Adv360 Pro"}'
 local KINESIS_LEFT_SWAP = '{"UserKeyMapping":['
-    .. '{"HIDKeyboardModifierMappingSrc":0x7000000E0,'
-    .. '"HIDKeyboardModifierMappingDst":0x7000000E3},'
     .. '{"HIDKeyboardModifierMappingSrc":0x7000000E3,'
     .. '"HIDKeyboardModifierMappingDst":0x7000000E0}]}'
 local KINESIS_DEVBOX_WINDOWS_CTRL_SWAP = '{"UserKeyMapping":['

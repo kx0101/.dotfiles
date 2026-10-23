@@ -11,7 +11,7 @@
 		<string>--matching</string>
 		<string>{"Product":"Adv360 Pro"}</string>
 		<string>--set</string>
-		<string>{"UserKeyMapping":[{"HIDKeyboardModifierMappingSrc":0x7000000E0,"HIDKeyboardModifierMappingDst":0x7000000E3}]}</string>
+		<string>{"UserKeyMapping":[{"HIDKeyboardModifierMappingSrc":0x7000000E3,"HIDKeyboardModifierMappingDst":0x7000000E0}]}</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>
