@@ -17,6 +17,7 @@ local apps = {
     v = "WhatsApp",      -- ⌥V  WhatsApp
     z = "Pyxida",        -- ⌥Z  Pyxida
     f = "Spotify",       -- ⌥F  Spotify
+    c = "GitHub Copilot", -- ⌥C  GitHub Copilot
 }
 
 for key, appName in pairs(apps) do
